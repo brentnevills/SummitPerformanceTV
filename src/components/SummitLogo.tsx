@@ -6,7 +6,7 @@ interface Props {
 }
 
 export const SummitLogo: React.FC<Props> = ({
-  className = "h-full max-h-[90%] w-auto object-contain",
+  className = "h-full w-auto object-contain",
   logoUrl,
 }) => {
   const [hasError, setHasError] = useState(false);

@@ -64,7 +64,7 @@ const VideoPlayerComponent: React.FC<Props> = ({
           // Direct fallback if API call returned failure
           setStreamData({
             videoId: currentVideoId,
-            embedUrl: `https://www.youtube.com/embed/${currentVideoId}?autoplay=1&mute=${muted ? 1 : 0}&enablejsapi=1&rel=0&modestbranding=1&controls=0&playsinline=1`,
+            embedUrl: `https://www.youtube.com/embed/${currentVideoId}?autoplay=1&mute=${muted ? 1 : 0}&enablejsapi=1&rel=0&modestbranding=1&controls=0&playsinline=1&cc_load_policy=1&cc_lang_pref=en&hl=en`,
             isDirectMedia: false,
             isRestrictedEmbed: false,
           });
@@ -75,7 +75,7 @@ const VideoPlayerComponent: React.FC<Props> = ({
         console.warn('Stream fetch error:', err);
         setStreamData({
           videoId: currentVideoId,
-          embedUrl: `https://www.youtube.com/embed/${currentVideoId}?autoplay=1&mute=${muted ? 1 : 0}&enablejsapi=1&rel=0&modestbranding=1&controls=0&playsinline=1`,
+          embedUrl: `https://www.youtube.com/embed/${currentVideoId}?autoplay=1&mute=${muted ? 1 : 0}&enablejsapi=1&rel=0&modestbranding=1&controls=0&playsinline=1&cc_load_policy=1&cc_lang_pref=en&hl=en`,
           isDirectMedia: false,
           isRestrictedEmbed: false,
         });
@@ -192,7 +192,7 @@ const VideoPlayerComponent: React.FC<Props> = ({
             ref={iframeRef}
             src={
               streamData?.embedUrl ||
-              `https://www.youtube.com/embed/${currentVideoId}?autoplay=1&mute=1&enablejsapi=1&rel=0&modestbranding=1&controls=0&playsinline=1`
+              `https://www.youtube.com/embed/${currentVideoId}?autoplay=1&mute=1&enablejsapi=1&rel=0&modestbranding=1&controls=0&playsinline=1&cc_load_policy=1&cc_lang_pref=en&hl=en`
             }
             title="TV Stream Player"
             className="w-full h-full border-0 bg-black"

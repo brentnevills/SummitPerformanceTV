@@ -79,7 +79,7 @@ app.get("/api/stream/:videoId", async (req, res) => {
   }
 
   // Default to optimized YouTube IFrame Embed URL with standard hardware decoding
-  const embedUrl = `https://www.youtube.com/embed/${cleanId}?autoplay=1&mute=1&enablejsapi=1&rel=0&modestbranding=1&controls=0&playsinline=1`;
+  const embedUrl = `https://www.youtube.com/embed/${cleanId}?autoplay=1&mute=1&enablejsapi=1&rel=0&modestbranding=1&controls=0&playsinline=1&cc_load_policy=1&cc_lang_pref=en&hl=en`;
 
   return res.json({
     success: true,
