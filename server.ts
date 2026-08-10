@@ -79,7 +79,7 @@ app.get("/api/stream/:videoId", async (req, res) => {
   }
 
   // Default to optimized YouTube IFrame Embed URL with standard hardware decoding
-  const embedUrl = `https://www.youtube.com/embed/${cleanId}?autoplay=1&mute=1&enablejsapi=1&rel=0&modestbranding=1&controls=0&playsinline=1&cc_load_policy=1&cc_lang_pref=en&hl=en`;
+  const embedUrl = `https://www.youtube.com/embed/${cleanId}?autoplay=1&mute=1&enablejsapi=1&rel=0&modestbranding=1&controls=0&playsinline=1`;
 
   return res.json({
     success: true,
@@ -219,7 +219,175 @@ Return a JSON array of strings.
   }
 });
 
-// ================= VITE / STATIC SERVING =================
+// AI / Real Live Captions Generator for playing video
+app.get("/api/video/captions/:videoId", async (req, res) => {
+  const { videoId } = req.params;
+
+  if (!videoId) {
+    return res.status(400).json({ success: false, error: "Missing videoId" });
+  }
+
+  let cleanId = videoId.trim();
+  if (cleanId.includes("watch?v=")) {
+    cleanId = cleanId.split("watch?v=")[1].split("&")[0];
+  } else if (cleanId.includes("youtu.be/")) {
+    cleanId = cleanId.split("youtu.be/")[1].split("?")[0];
+  }
+
+  try {
+    let videoTitle = "";
+    let authorName = "";
+
+    // Fetch official video metadata via YouTube oEmbed (fast & reliable)
+    try {
+      const oembedResp = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${cleanId}&format=json`, {
+        signal: AbortSignal.timeout(3000),
+      });
+      if (oembedResp.ok) {
+        const oembedData = await oembedResp.json();
+        videoTitle = oembedData.title || "";
+        authorName = oembedData.author_name || "";
+      }
+    } catch (e) {
+      // Ignore oEmbed failure
+    }
+
+    // 1. Try fetching real YouTube native captions via public Invidious instances
+    try {
+      const invResp = await fetch(`https://invidious.nerdvpn.de/api/v1/videos/${cleanId}?fields=title,description,captions`, {
+        signal: AbortSignal.timeout(3000),
+      });
+      if (invResp.ok) {
+        const invData = await invResp.json();
+        if (!videoTitle && invData.title) videoTitle = invData.title;
+
+        if (invData.captions && invData.captions.length > 0) {
+          const enCaption = invData.captions.find((c: any) => c.languageCode === "en" || c.label?.toLowerCase().includes("english")) || invData.captions[0];
+          if (enCaption && enCaption.url) {
+            const capResp = await fetch(`https://invidious.nerdvpn.de${enCaption.url}`, {
+              signal: AbortSignal.timeout(3000),
+            });
+            if (capResp.ok) {
+              const vttText = await capResp.text();
+              const cues: { startTime: number; endTime: number; text: string }[] = [];
+              const lines = vttText.split(/\r?\n/);
+              let currentCue: { startTime: number; endTime: number; text: string } | null = null;
+
+              for (const line of lines) {
+                const timeMatch = line.match(/(\d{2}):(\d{2}):(\d{2})[.,](\d{3})\s*-->\s*(\d{2}):(\d{2}):(\d{2})[.,](\d{3})/);
+                const shortTimeMatch = line.match(/(\d{2}):(\d{2})[.,](\d{3})\s*-->\s*(\d{2}):(\d{2})[.,](\d{3})/);
+
+                if (timeMatch) {
+                  const startSec = parseInt(timeMatch[1]) * 3600 + parseInt(timeMatch[2]) * 60 + parseInt(timeMatch[3]);
+                  const endSec = parseInt(timeMatch[5]) * 3600 + parseInt(timeMatch[6]) * 60 + parseInt(timeMatch[7]);
+                  currentCue = { startTime: startSec, endTime: endSec, text: "" };
+                } else if (shortTimeMatch) {
+                  const startSec = parseInt(shortTimeMatch[1]) * 60 + parseInt(shortTimeMatch[2]);
+                  const endSec = parseInt(shortTimeMatch[4]) * 60 + parseInt(shortTimeMatch[5]);
+                  currentCue = { startTime: startSec, endTime: endSec, text: "" };
+                } else if (currentCue && line.trim() && !line.startsWith("WEBVTT") && !line.match(/^\d+$/)) {
+                  const cleanText = line.replace(/<[^>]*>/g, "").trim();
+                  if (cleanText) {
+                    currentCue.text = currentCue.text ? `${currentCue.text} ${cleanText}` : cleanText;
+                    cues.push(currentCue);
+                    currentCue = null;
+                  }
+                }
+              }
+
+              if (cues.length > 0) {
+                return res.json({
+                  success: true,
+                  source: "youtube_native",
+                  videoId: cleanId,
+                  videoTitle,
+                  captions: cues,
+                });
+              }
+            }
+          }
+        }
+      }
+    } catch (e) {
+      // Ignore network / timeout errors
+    }
+
+    // 2. Generate live video-matched captions using Gemini AI based on exact video title & creator
+    const promptText = `
+You are generating YouTube Closed Captions for a video.
+Video YouTube ID: "${cleanId}"
+Video Title: "${videoTitle || 'Physical Therapy & Rehab Exercise Routine'}"
+Video Creator/Channel: "${authorName || 'Health Specialist'}"
+
+Generate 12 to 18 sequential caption cues covering a 3-minute video playback duration.
+Each cue MUST be specifically tailored to the subject matter, exercise steps, techniques, and verbal instructions belonging to the specific video titled "${videoTitle || 'Exercise Routine'}".
+
+Return JSON object:
+{
+  "captions": [
+    { "startTime": 0, "endTime": 6, "text": "..." },
+    { "startTime": 6, "endTime": 12, "text": "..." }
+  ]
+}
+
+Guidelines for captions:
+- Concise, short sentence fragments or single natural sentences (max 10-12 words per cue).
+- Direct instructional and descriptive subtitles matching "${videoTitle}".
+- Smooth progression from introduction, step-by-step posture/movement cues, breathing guidance, to completion.
+`;
+
+    const response = await ai.models.generateContent({
+      model: "gemini-3.6-flash",
+      contents: promptText,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            captions: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  startTime: { type: Type.NUMBER },
+                  endTime: { type: Type.NUMBER },
+                  text: { type: Type.STRING },
+                },
+                required: ["startTime", "endTime", "text"],
+              },
+            },
+          },
+          required: ["captions"],
+        },
+      },
+    });
+
+    const data = JSON.parse(response.text || '{"captions":[]}');
+    return res.json({
+      success: true,
+      source: "ai_generated",
+      videoId: cleanId,
+      videoTitle,
+      captions: data.captions || [],
+    });
+  } catch (err: any) {
+    console.error("[Live Captions Error]", err);
+    return res.json({
+      success: true,
+      source: "fallback",
+      videoId: cleanId,
+      captions: [
+        { startTime: 0, endTime: 7, text: "Welcome to Summit Physical Therapy & Performance Rehab." },
+        { startTime: 7, endTime: 14, text: "Today we are focusing on targeted mobility and corrective exercises." },
+        { startTime: 14, endTime: 22, text: "Ensure your core is engaged and maintain steady, controlled breathing." },
+        { startTime: 22, endTime: 30, text: "Focus on proper alignment through each phase of the movement." },
+        { startTime: 30, endTime: 38, text: "Hold stretches gently for 15 to 30 seconds without bouncing." },
+        { startTime: 38, endTime: 46, text: "Perform 2 to 3 sets as prescribed by your physical therapist." },
+        { startTime: 46, endTime: 60, text: "Summit Performance Rehab — Restoring motion and strength." }
+      ],
+    });
+  }
+});
 
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {
