@@ -1,0 +1,6 @@
+{
+  "name": "Summit TV Clinic Signage",
+  "description": "Smart TV signage application for clinic displays and Bolva TVs with real-time announcements, welcome overlay, anti-burn-in protection, and YouTube video stream player.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
