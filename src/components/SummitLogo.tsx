@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import summitLogoImg from '../assets/images/SummitLogo.png';
 
 interface Props {
   className?: string;
@@ -10,12 +9,14 @@ export const SummitLogo: React.FC<Props> = ({
   className = "h-full max-h-[90%] w-auto object-contain",
   logoUrl,
 }) => {
-  const resolveLogoUrl = (url?: string) => {
-    if (!url) return summitLogoImg;
-    if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:')) {
-      return url;
+  const [hasError, setHasError] = useState(false);
+
+  const resolveLogoUrl = (rawUrl?: string) => {
+    const target = rawUrl || 'SummitLogo.png';
+    if (target.startsWith('http://') || target.startsWith('https://') || target.startsWith('data:') || target.startsWith('blob:')) {
+      return target;
     }
-    const cleanPath = url.startsWith('/') ? url.slice(1) : url;
+    const cleanPath = target.startsWith('/') ? target.slice(1) : target;
     const baseUrl = import.meta.env.BASE_URL || './';
     const cleanBase = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
     return `${cleanBase}${cleanPath}`;
@@ -24,8 +25,19 @@ export const SummitLogo: React.FC<Props> = ({
   const [imgSrc, setImgSrc] = useState(() => resolveLogoUrl(logoUrl));
 
   useEffect(() => {
+    setHasError(false);
     setImgSrc(resolveLogoUrl(logoUrl));
   }, [logoUrl]);
+
+  if (hasError) {
+    return (
+      <div className={`flex items-center justify-center bg-navy-800/80 text-white font-bold px-4 py-2 rounded border border-accent/40 ${className}`}>
+        <span className="tracking-wider text-sm md:text-base font-serif text-accent uppercase">
+          Summit Performance Rehab
+        </span>
+      </div>
+    );
+  }
 
   return (
     <img
@@ -33,16 +45,9 @@ export const SummitLogo: React.FC<Props> = ({
       alt="Summit Performance Rehab & Wellness Centre"
       className={className}
       onError={() => {
-        if (imgSrc !== summitLogoImg) {
-          setImgSrc(summitLogoImg);
-        }
+        setHasError(true);
       }}
       referrerPolicy="no-referrer"
     />
   );
 };
-
-
-
-
-
