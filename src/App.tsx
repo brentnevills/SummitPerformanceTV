@@ -28,16 +28,33 @@ export default function App() {
   // Focus keeper ref to prevent TV screen saver
   const focusBouncerRef = useRef<HTMLInputElement | null>(null);
 
-  // Load clinic settings from backend API on mount
+  // Load clinic settings on mount (from localStorage first, then backend API if available)
   useEffect(() => {
+    try {
+      const saved = localStorage.getItem('summit_clinic_settings');
+      if (saved) {
+        setSettings(JSON.parse(saved));
+      }
+    } catch (e) {
+      // Ignore localStorage read errors
+    }
+
     fetch('/api/clinic/settings')
-      .then((res) => res.json())
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      })
       .then((data) => {
         if (data.success && data.settings) {
           setSettings(data.settings);
+          try {
+            localStorage.setItem('summit_clinic_settings', JSON.stringify(data.settings));
+          } catch (e) {
+            // Ignore localStorage write errors
+          }
         }
       })
-      .catch((err) => console.warn('Could not fetch server settings, using defaults:', err));
+      .catch((err) => console.warn('Could not fetch server settings, using local/default settings:', err));
   }, []);
 
   // Update video ID list when playlist or settings change
@@ -124,7 +141,13 @@ export default function App() {
     const updated = { ...settings, ...partial };
     setSettings(updated);
 
-    // Sync to backend
+    try {
+      localStorage.setItem('summit_clinic_settings', JSON.stringify(updated));
+    } catch (e) {
+      // Ignore write error
+    }
+
+    // Sync to backend if server present
     fetch('/api/clinic/settings', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
