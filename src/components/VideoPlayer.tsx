@@ -50,6 +50,9 @@ const VideoPlayerComponent: React.FC<Props> = ({
     async function fetchStream() {
       try {
         const resp = await fetch(`/api/stream/${currentVideoId}`);
+        if (!resp.ok) {
+          throw new Error(`Server returned ${resp.status}`);
+        }
         const data = await resp.json();
 
         if (!isMounted) return;
