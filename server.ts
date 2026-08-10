@@ -78,8 +78,8 @@ app.get("/api/stream/:videoId", async (req, res) => {
     });
   }
 
-  // Default to optimized YouTube IFrame Embed URL with forced 1080p HD quality, modest branding, and zero throttling
-  const embedUrl = `https://www.youtube-nocookie.com/embed/${cleanId}?autoplay=1&mute=1&enablejsapi=1&vq=hd1080&rel=0&modestbranding=1&controls=0&playsinline=1&iv_load_policy=3`;
+  // Default to optimized YouTube IFrame Embed URL with standard hardware decoding
+  const embedUrl = `https://www.youtube.com/embed/${cleanId}?autoplay=1&mute=1&enablejsapi=1&rel=0&modestbranding=1&controls=0&playsinline=1`;
 
   return res.json({
     success: true,

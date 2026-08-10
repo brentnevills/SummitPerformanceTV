@@ -163,6 +163,7 @@ export default function App() {
         primaryColor={settings.primaryColor}
         accentColor={settings.accentColor}
         onStart={handleStartDisplay}
+        onOpenSettings={() => setShowSettingsDrawer(true)}
       />
 
       {/* Welcome Splash Screen Overlay */}
@@ -185,6 +186,7 @@ export default function App() {
           primaryColor={settings.primaryColor}
           accentColor={settings.accentColor}
           onOpenSettings={() => setShowSettingsDrawer(true)}
+          isStarted={isStarted}
         />
 
         {/* Sidebar Announcements & Clock */}

@@ -21,7 +21,7 @@ interface StreamData {
   fallbackReason?: string;
 }
 
-export const VideoPlayer: React.FC<Props> = ({
+const VideoPlayerComponent: React.FC<Props> = ({
   videoIds,
   currentIndex,
   onNextVideo,
@@ -61,7 +61,7 @@ export const VideoPlayer: React.FC<Props> = ({
           // Direct fallback if API call returned failure
           setStreamData({
             videoId: currentVideoId,
-            embedUrl: `https://www.youtube-nocookie.com/embed/${currentVideoId}?autoplay=1&mute=${muted ? 1 : 0}&enablejsapi=1&vq=hd1080&rel=0&modestbranding=1&controls=0&playsinline=1`,
+            embedUrl: `https://www.youtube.com/embed/${currentVideoId}?autoplay=1&mute=${muted ? 1 : 0}&enablejsapi=1&rel=0&modestbranding=1&controls=0&playsinline=1`,
             isDirectMedia: false,
             isRestrictedEmbed: false,
           });
@@ -72,7 +72,7 @@ export const VideoPlayer: React.FC<Props> = ({
         console.warn('Stream fetch error:', err);
         setStreamData({
           videoId: currentVideoId,
-          embedUrl: `https://www.youtube-nocookie.com/embed/${currentVideoId}?autoplay=1&mute=${muted ? 1 : 0}&enablejsapi=1&vq=hd1080&rel=0&modestbranding=1&controls=0&playsinline=1`,
+          embedUrl: `https://www.youtube.com/embed/${currentVideoId}?autoplay=1&mute=${muted ? 1 : 0}&enablejsapi=1&rel=0&modestbranding=1&controls=0&playsinline=1`,
           isDirectMedia: false,
           isRestrictedEmbed: false,
         });
@@ -189,7 +189,7 @@ export const VideoPlayer: React.FC<Props> = ({
             ref={iframeRef}
             src={
               streamData?.embedUrl ||
-              `https://www.youtube-nocookie.com/embed/${currentVideoId}?autoplay=1&mute=1&enablejsapi=1&rel=0&modestbranding=1&controls=0&playsinline=1`
+              `https://www.youtube.com/embed/${currentVideoId}?autoplay=1&mute=1&enablejsapi=1&rel=0&modestbranding=1&controls=0&playsinline=1`
             }
             title="TV Stream Player"
             className="w-full h-full border-0 bg-black"
@@ -248,3 +248,5 @@ export const VideoPlayer: React.FC<Props> = ({
     </div>
   );
 };
+
+export const VideoPlayer = React.memo(VideoPlayerComponent);
