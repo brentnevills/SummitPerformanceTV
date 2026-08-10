@@ -1,0 +1,38 @@
+{
+  "entities": {
+    "clinic_settings": {
+      "title": "Clinic Settings",
+      "description": "Real-time synchronized clinic settings across devices",
+      "type": "object",
+      "properties": {
+        "clinicName": { "type": "string" },
+        "tagline": { "type": "string" },
+        "logoUrl": { "type": "string" },
+        "logoIconUrl": { "type": "string" },
+        "primaryColor": { "type": "string" },
+        "accentColor": { "type": "string" },
+        "rotationSpeed": { "type": "number" },
+        "welcomeInterval": { "type": "number" },
+        "welcomeDuration": { "type": "number" },
+        "enableWelcomeOverlay": { "type": "boolean" },
+        "enableAntiBurnIn": { "type": "boolean" },
+        "antiBurnInOpacity": { "type": "number" },
+        "currentPlaylistId": { "type": "string" },
+        "playlists": { "type": "array" },
+        "customVideos": { "type": "array" },
+        "infoItems": { "type": "array" },
+        "phone": { "type": "string" },
+        "address": { "type": "string" },
+        "instagramHandle1": { "type": "string" },
+        "instagramHandle2": { "type": "string" },
+        "qrCodeUrl": { "type": "string" },
+        "clockFormat": { "type": "string" },
+        "showWeather": { "type": "boolean" },
+        "weatherLocation": { "type": "string" },
+        "tvResolutionScale": { "type": "string" },
+        "preventTvSleep": { "type": "boolean" },
+        "mutedByPolicy": { "type": "boolean" }
+      }
+    }
+  }
+}

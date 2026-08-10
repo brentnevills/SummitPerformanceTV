@@ -90,8 +90,8 @@ export const PRESET_PLAYLISTS: VideoPlaylist[] = [
 export const DEFAULT_CLINIC_SETTINGS: ClinicSettings = {
   clinicName: 'Summit Performance Rehab',
   tagline: 'Wellness Centre & Physical Therapy',
-  logoUrl: '/SummitLogo.png',
-  logoIconUrl: '/SummitLogo.png',
+  logoUrl: 'SummitLogo.png',
+  logoIconUrl: 'SummitLogo.png',
   primaryColor: '#122442', // Summit Navy
   accentColor: '#76b72a',  // Summit Green
   rotationSpeed: 10000,    // 10s announcement rotation

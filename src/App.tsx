@@ -13,6 +13,7 @@ import { TopBar } from './components/TopBar';
 import { AnnouncementSidebar } from './components/AnnouncementSidebar';
 import { VideoPlayer } from './components/VideoPlayer';
 import { SettingsDrawer } from './components/SettingsDrawer';
+import { subscribeToClinicSettings, saveClinicSettingsToFirestore } from './lib/firebase';
 
 export default function App() {
   const [settings, setSettings] = useState<ClinicSettings>(DEFAULT_CLINIC_SETTINGS);
@@ -28,7 +29,7 @@ export default function App() {
   // Focus keeper ref to prevent TV screen saver
   const focusBouncerRef = useRef<HTMLInputElement | null>(null);
 
-  // Load clinic settings on mount (from localStorage first, then backend API if available)
+  // Load clinic settings on mount and subscribe to real-time changes across devices via Firestore
   useEffect(() => {
     try {
       const saved = localStorage.getItem('summit_clinic_settings');
@@ -39,6 +40,29 @@ export default function App() {
       // Ignore localStorage read errors
     }
 
+    // Subscribe to Firestore for instant real-time synchronization across devices
+    const unsubscribe = subscribeToClinicSettings(
+      (remoteSettings) => {
+        if (remoteSettings) {
+          setSettings(remoteSettings);
+          try {
+            localStorage.setItem('summit_clinic_settings', JSON.stringify(remoteSettings));
+          } catch (e) {
+            // Ignore write error
+          }
+        } else {
+          // First time initialization: Seed Firestore with default settings
+          saveClinicSettingsToFirestore(DEFAULT_CLINIC_SETTINGS).catch((err) =>
+            console.warn('Failed to seed default settings to Firestore:', err)
+          );
+        }
+      },
+      (err) => {
+        console.warn('Firestore real-time sync offline, falling back to local/backend settings:', err);
+      }
+    );
+
+    // Also fetch initial backend API settings as fallback
     fetch('/api/clinic/settings')
       .then((res) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -46,15 +70,12 @@ export default function App() {
       })
       .then((data) => {
         if (data.success && data.settings) {
-          setSettings(data.settings);
-          try {
-            localStorage.setItem('summit_clinic_settings', JSON.stringify(data.settings));
-          } catch (e) {
-            // Ignore localStorage write errors
-          }
+          setSettings((prev) => ({ ...prev, ...data.settings }));
         }
       })
-      .catch((err) => console.warn('Could not fetch server settings, using local/default settings:', err));
+      .catch((err) => console.warn('Could not fetch server settings:', err));
+
+    return () => unsubscribe();
   }, []);
 
   // Update video ID list when playlist or settings change
@@ -136,7 +157,7 @@ export default function App() {
     setCurrentVideoIndex((prev) => (prev + 1) % videoIds.length);
   };
 
-  // Save Settings
+  // Save Settings (Syncs across devices in real-time)
   const handleSaveSettings = (partial: Partial<ClinicSettings>) => {
     const updated = { ...settings, ...partial };
     setSettings(updated);
@@ -146,6 +167,11 @@ export default function App() {
     } catch (e) {
       // Ignore write error
     }
+
+    // Save to Firestore for real-time cross-device sync
+    saveClinicSettingsToFirestore(updated).catch((e) =>
+      console.warn('Firestore sync error:', e)
+    );
 
     // Sync to backend if server present
     fetch('/api/clinic/settings', {
