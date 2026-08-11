@@ -52,6 +52,10 @@ export interface ClinicSettings {
   tvResolutionScale: '1080p' | '720p' | '4k';
   preventTvSleep: boolean;
   mutedByPolicy: boolean;
+  notificationFontSize?: 'small' | 'medium' | 'large' | 'xlarge';
+  enableClosedCaptions?: boolean;
+  captionFontSize?: 'small' | 'medium' | 'large' | 'xlarge';
+  captionPosition?: 'bottom' | 'top';
 }
 
 export interface StreamExtractionResponse {

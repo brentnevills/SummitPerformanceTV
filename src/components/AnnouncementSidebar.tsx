@@ -7,6 +7,7 @@ interface Props {
   primaryColor?: string;
   accentColor?: string;
   clockFormat?: '12h' | '24h';
+  fontSize?: 'small' | 'medium' | 'large' | 'xlarge';
 }
 
 export const AnnouncementSidebar: React.FC<Props> = ({
@@ -15,9 +16,18 @@ export const AnnouncementSidebar: React.FC<Props> = ({
   primaryColor = 'var(--summit-navy)',
   accentColor = 'var(--summit-green)',
   clockFormat = '12h',
+  fontSize = 'medium',
 }) => {
   const activeAnnouncements = announcements.filter((a) => a.active);
   const [currentIndex, setCurrentIndex] = useState(0);
+
+  // Map font size
+  const fontStyleMap = {
+    small: { fontSize: '1rem', lineHeight: '1.4rem' },
+    medium: { fontSize: '1.25rem', lineHeight: '1.75rem' },
+    large: { fontSize: '1.65rem', lineHeight: '2.15rem' },
+    xlarge: { fontSize: '2.25rem', lineHeight: '2.8rem' },
+  }[fontSize] || { fontSize: '1.25rem', lineHeight: '1.75rem' };
 
   // Time and Date State
   const [timeStr, setTimeStr] = useState('');
@@ -78,6 +88,7 @@ export const AnnouncementSidebar: React.FC<Props> = ({
               style={{
                 color: primaryColor,
                 borderLeftColor: accentColor,
+                ...fontStyleMap,
               }}
             >
               {item.text}

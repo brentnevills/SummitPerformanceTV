@@ -48,6 +48,28 @@ app.post("/api/clinic/settings", (req, res) => {
   }
 });
 
+// Helper to extract clean 11-char YouTube ID from any YouTube URL (watch, live, shorts, embed, channel)
+function sanitizeYouTubeId(raw: string): string {
+  if (!raw) return "dJ9A_A4U3Xg";
+  let str = raw.trim();
+  if (str.includes("watch?v=")) {
+    str = str.split("watch?v=")[1].split("&")[0].split("?")[0];
+  } else if (str.includes("v=")) {
+    str = str.split("v=")[1].split("&")[0].split("?")[0];
+  } else if (str.includes("youtu.be/")) {
+    str = str.split("youtu.be/")[1].split("?")[0].split("&")[0];
+  } else if (str.includes("youtube.com/live/")) {
+    str = str.split("youtube.com/live/")[1].split("?")[0].split("&")[0];
+  } else if (str.includes("youtube.com/embed/")) {
+    str = str.split("youtube.com/embed/")[1].split("?")[0].split("&")[0];
+  } else if (str.includes("youtube.com/shorts/")) {
+    str = str.split("youtube.com/shorts/")[1].split("?")[0].split("&")[0];
+  } else if (str.includes("youtube.com/v/")) {
+    str = str.split("youtube.com/v/")[1].split("?")[0].split("&")[0];
+  }
+  return str.split("/")[0].split("#")[0].split("?")[0] || "dJ9A_A4U3Xg";
+}
+
 // YouTube Direct Stream & Restriction Bypass Endpoint
 app.get("/api/stream/:videoId", async (req, res) => {
   const { videoId } = req.params;
@@ -56,27 +78,22 @@ app.get("/api/stream/:videoId", async (req, res) => {
     return res.status(400).json({ success: false, error: "Missing videoId parameter" });
   }
 
-  // Sanitize videoId in case full URL was passed
-  let cleanId = videoId.trim();
-  if (cleanId.includes("watch?v=")) {
-    cleanId = cleanId.split("watch?v=")[1].split("&")[0];
-  } else if (cleanId.includes("youtu.be/")) {
-    cleanId = cleanId.split("youtu.be/")[1].split("?")[0];
-  }
-
-  console.log(`[Stream Processing] Requesting ultra-smooth HD stream for video ID: ${cleanId}`);
-
   // If a direct URL to an mp4 file was supplied
-  if (cleanId.startsWith("http") && (cleanId.endsWith(".mp4") || cleanId.endsWith(".webm"))) {
+  if (videoId.startsWith("http") && (videoId.endsWith(".mp4") || videoId.endsWith(".webm"))) {
     return res.json({
       success: true,
-      videoId: cleanId,
+      videoId,
       title: "Direct MP4 Video Stream",
-      url: cleanId,
+      url: videoId,
       isDirectMedia: true,
       isRestrictedEmbed: false,
     });
   }
+
+  // Sanitize videoId in case full URL (including livestream/shorts link) was passed
+  const cleanId = sanitizeYouTubeId(videoId);
+
+  console.log(`[Stream Processing] Requesting ultra-smooth HD stream for video ID: ${cleanId}`);
 
   // Default to optimized YouTube IFrame Embed URL with standard hardware decoding & native CC support
   const embedUrl = `https://www.youtube.com/embed/${cleanId}?autoplay=1&mute=1&enablejsapi=1&rel=0&modestbranding=1&controls=0&playsinline=1&cc_load_policy=1&cc_lang_pref=en&hl=en`;
@@ -320,12 +337,7 @@ app.get("/api/video/captions/:videoId", async (req, res) => {
     return res.status(400).json({ success: false, error: "Missing videoId" });
   }
 
-  let cleanId = videoId.trim();
-  if (cleanId.includes("watch?v=")) {
-    cleanId = cleanId.split("watch?v=")[1].split("&")[0];
-  } else if (cleanId.includes("youtu.be/")) {
-    cleanId = cleanId.split("youtu.be/")[1].split("?")[0];
-  }
+  const cleanId = sanitizeYouTubeId(videoId);
 
   // Check in-memory cache first to eliminate quota consumption
   if (captionCache.has(cleanId)) {
@@ -427,101 +439,39 @@ app.get("/api/video/captions/:videoId", async (req, res) => {
     // Ignore network / timeout errors
   }
 
-  // 2. Generate live video-matched captions using Gemini AI (if not in quota cooldown)
-  if (Date.now() > geminiQuotaCooldownUntil) {
-    try {
-      const promptText = `
-You are generating YouTube Closed Captions for a video with speaker attribution.
-Video YouTube ID: "${cleanId}"
-Video Title: "${videoTitle || 'Physical Therapy & Rehab Exercise Routine'}"
-Video Creator/Channel: "${authorName || 'Health Specialist'}"
-
-Generate 10 to 14 sequential caption cues covering a 2-3 minute video playback duration.
-Each cue MUST be specifically tailored to the subject matter and instructions belonging to "${videoTitle || 'Exercise Routine'}".
-Assign a distinct speaker label (e.g. "Dr. Sarah (PT)", "Instructor", "Dr. Alex (Rehab Specialist)", "Patient", or "Narrator") to every cue.
-
-Return JSON object:
-{
-  "captions": [
-    { "startTime": 0, "endTime": 6, "speaker": "Dr. Sarah (PT)", "text": "..." },
-    { "startTime": 6, "endTime": 12, "speaker": "Instructor", "text": "..." }
-  ]
-}
-`;
-
-      const response = await ai.models.generateContent({
-        model: "gemini-3.6-flash",
-        contents: promptText,
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              captions: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    startTime: { type: Type.NUMBER },
-                    endTime: { type: Type.NUMBER },
-                    text: { type: Type.STRING },
-                    speaker: { type: Type.STRING },
-                  },
-                  required: ["startTime", "endTime", "text"],
-                },
-              },
-            },
-            required: ["captions"],
-          },
-        },
-      });
-
-      const data = JSON.parse(response.text || '{"captions":[]}');
-      if (data.captions && data.captions.length > 0) {
-        const result = {
-          success: true,
-          source: "ai_generated",
-          videoId: cleanId,
-          videoTitle,
-          captions: data.captions,
-        };
-        captionCache.set(cleanId, result);
-        return res.json(result);
-      }
-    } catch (geminiErr: any) {
-      // Set a 3-minute cooldown if quota is hit, avoiding repetitive failed network requests
-      geminiQuotaCooldownUntil = Date.now() + 180000;
-    }
-  }
-
-  // 3. High-quality intelligent fallback captions based on video title or general rehab exercise
-  const fallbackResult = {
+  // 2. Return YouTube native live ASR stream indicator
+  const liveAsrResult = {
     success: true,
-    source: "smart_fallback",
+    source: "youtube_live_asr",
     videoId: cleanId,
-    videoTitle: videoTitle || "Physical Therapy & Movement Guide",
-    captions: videoTitle ? [
-      { startTime: 0, endTime: 6, speaker: "Dr. Sarah (PT)", text: `Welcome to: ${videoTitle}` },
-      { startTime: 6, endTime: 12, speaker: "Instructor", text: "Focus on proper alignment, steady posture, and controlled motion." },
-      { startTime: 12, endTime: 18, speaker: "Dr. Sarah (PT)", text: "Inhale deeply as you begin the movement, keeping your core stable." },
-      { startTime: 18, endTime: 24, speaker: "Instructor", text: "Exhale gently as you press through the full range of motion." },
-      { startTime: 24, endTime: 30, speaker: "Dr. Sarah (PT)", text: "Perform each repetition smoothly without bouncing or straining." },
-      { startTime: 30, endTime: 36, speaker: "Instructor", text: "Hold stretches for 15-30 seconds to allow muscle relaxation." },
-      { startTime: 36, endTime: 42, speaker: "Dr. Sarah (PT)", text: "Complete 2 to 3 sets daily as prescribed by your practitioner." },
-      { startTime: 42, endTime: 48, speaker: "Clinic Announcer", text: "Summit Performance Rehab — Restoring strength, balance, and health." }
-    ] : [
-      { startTime: 0, endTime: 6, speaker: "Dr. Sarah (PT)", text: "Welcome to Summit Physical Therapy & Performance Rehab." },
-      { startTime: 6, endTime: 12, speaker: "Instructor", text: "Today we are focusing on targeted mobility and corrective exercises." },
-      { startTime: 12, endTime: 18, speaker: "Dr. Sarah (PT)", text: "Ensure your core is engaged and maintain steady, controlled breathing." },
-      { startTime: 18, endTime: 24, speaker: "Instructor", text: "Focus on proper alignment through each phase of the movement." },
-      { startTime: 24, endTime: 30, speaker: "Dr. Sarah (PT)", text: "Hold stretches gently for 15 to 30 seconds without bouncing." },
-      { startTime: 30, endTime: 36, speaker: "Instructor", text: "Perform 2 to 3 sets as prescribed by your physical therapist." },
-      { startTime: 36, endTime: 42, speaker: "Clinic Announcer", text: "Summit Performance Rehab — Restoring motion and strength." }
-    ],
+    videoTitle: videoTitle || "Summit TV Live Stream",
+    captions: [],
+    message: "YouTube Native Speech-to-Text Active"
   };
 
-  captionCache.set(cleanId, fallbackResult);
-  return res.json(fallbackResult);
+  captionCache.set(cleanId, liveAsrResult);
+  return res.json(liveAsrResult);
+});
+
+// Endpoint to fetch YouTube Video Title via oEmbed
+app.get("/api/youtube-title/:videoId", async (req, res) => {
+  const { videoId } = req.params;
+  if (!videoId) return res.status(400).json({ success: false, title: "" });
+
+  const cleanId = sanitizeYouTubeId(videoId);
+
+  try {
+    const oembedResp = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${cleanId}&format=json`, {
+      signal: AbortSignal.timeout(4000),
+    });
+    if (oembedResp.ok) {
+      const data = await oembedResp.json();
+      return res.json({ success: true, title: data.title, author: data.author_name, videoId: cleanId });
+    }
+  } catch (e) {
+    // Ignore error
+  }
+  return res.json({ success: false, title: cleanId, videoId: cleanId });
 });
 
 async function startServer() {

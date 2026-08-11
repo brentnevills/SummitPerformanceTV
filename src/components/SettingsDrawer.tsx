@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { ClinicSettings, ClinicAnnouncement, VideoPlaylist } from '../types';
+import { extractYouTubeId } from '../utils/youtube';
 import {
   X,
   Tv,
@@ -53,7 +54,6 @@ export const SettingsDrawer: React.FC<Props> = ({
   const [editingNoticeId, setEditingNoticeId] = useState<string | null>(null);
   const [editingNoticeText, setEditingNoticeText] = useState('');
   const [editingNoticeCategory, setEditingNoticeCategory] = useState<'general' | 'reminder' | 'wellness' | 'social' | 'promo'>('general');
-  const [generatingAiNotices, setGeneratingAiNotices] = useState(false);
 
   // Local state for playlists & video management
   const [newPlaylistTitle, setNewPlaylistTitle] = useState('');
@@ -63,6 +63,33 @@ export const SettingsDrawer: React.FC<Props> = ({
   const [newVideoUrl, setNewVideoUrl] = useState('');
   const [testStreamResult, setTestStreamResult] = useState<any>(null);
   const [testingStream, setTestingStream] = useState(false);
+
+  // YouTube Video Titles Cache
+  const [videoTitlesMap, setVideoTitlesMap] = useState<Record<string, string>>({
+    'dJ9A_A4U3Xg': 'Full Body Mobility & Physical Therapy Stretches',
+    '50kH0f3B0aY': 'Lower Back Pain Relief Stretches & Core Strengthening',
+    'inpok4MKVLM': 'Desk Posture Correction & Shoulder Exercises',
+  });
+
+  const activePlaylist =
+    settings.playlists.find((p) => p.id === settings.currentPlaylistId) || settings.playlists[0];
+
+  // Fetch missing YouTube video titles for active playlist
+  React.useEffect(() => {
+    if (!activePlaylist) return;
+    activePlaylist.videoIds.forEach((vId) => {
+      if (!videoTitlesMap[vId]) {
+        fetch(`/api/youtube-title/${vId}`)
+          .then((res) => res.json())
+          .then((data) => {
+            if (data.success && data.title) {
+              setVideoTitlesMap((prev) => ({ ...prev, [vId]: data.title }));
+            }
+          })
+          .catch(() => {});
+      }
+    });
+  }, [activePlaylist?.videoIds]);
 
   if (!show) return null;
 
@@ -129,36 +156,6 @@ export const SettingsDrawer: React.FC<Props> = ({
     onSaveSettings({ infoItems: updated });
   };
 
-  // Gemini AI Generate Notifications
-  const handleGenerateAiNotices = async () => {
-    setGeneratingAiNotices(true);
-    try {
-      const resp = await fetch('/api/clinic/generate-announcements', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          clinicName: settings.clinicName,
-          specialty: settings.tagline,
-          count: 6,
-        }),
-      });
-      const data = await resp.json();
-      if (data.success && Array.isArray(data.announcements)) {
-        const formatted: ClinicAnnouncement[] = data.announcements.map((a: any, idx: number) => ({
-          id: `ai_${Date.now()}_${idx}`,
-          text: a.text,
-          category: a.category || 'wellness',
-          active: true,
-        }));
-        onSaveSettings({ infoItems: [...settings.infoItems, ...formatted] });
-      }
-    } catch (err) {
-      console.error('AI Announcement error:', err);
-    } finally {
-      setGeneratingAiNotices(false);
-    }
-  };
-
   // Create New Playlist
   const handleCreatePlaylist = () => {
     if (!newPlaylistTitle.trim()) return;
@@ -201,12 +198,8 @@ export const SettingsDrawer: React.FC<Props> = ({
   // Add Video to Selected Playlist
   const handleAddVideo = () => {
     if (!newVideoUrl.trim()) return;
-    let videoId = newVideoUrl.trim();
-    if (videoId.includes('v=')) {
-      videoId = videoId.split('v=')[1].split('&')[0];
-    } else if (videoId.includes('youtu.be/')) {
-      videoId = videoId.split('youtu.be/')[1].split('?')[0];
-    }
+    const videoId = extractYouTubeId(newVideoUrl);
+    if (!videoId) return;
 
     const currentPl =
       settings.playlists.find((p) => p.id === settings.currentPlaylistId) || settings.playlists[0];
@@ -283,9 +276,6 @@ export const SettingsDrawer: React.FC<Props> = ({
     }
   };
 
-  const activePlaylist =
-    settings.playlists.find((p) => p.id === settings.currentPlaylistId) || settings.playlists[0];
-
   return (
     <div className="fixed inset-0 z-[100000] bg-slate-950/80 backdrop-blur-md flex justify-end animate-fade-in">
       <div className="w-full max-w-2xl bg-white h-full shadow-2xl flex flex-col text-slate-800 border-l border-slate-200">
@@ -350,27 +340,6 @@ export const SettingsDrawer: React.FC<Props> = ({
           {/* TAB 1: NOTIFICATIONS (ANNOUNCEMENTS & EDITING) */}
           {activeTab === 'notifications' && (
             <div className="space-y-6">
-              {/* Gemini AI Notice Generator */}
-              <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-200 flex items-center justify-between">
-                <div>
-                  <h4 className="font-bold text-emerald-900 text-sm flex items-center gap-2">
-                    <Sparkles className="w-4 h-4 text-emerald-600" />
-                    <span>Gemini AI Notification Generator</span>
-                  </h4>
-                  <p className="text-xs text-emerald-700 mt-0.5">
-                    Auto-generate wellness tips and patient reminders tailored to your clinic.
-                  </p>
-                </div>
-                <button
-                  onClick={handleGenerateAiNotices}
-                  disabled={generatingAiNotices}
-                  className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-md cursor-pointer flex items-center gap-2 disabled:opacity-50"
-                >
-                  {generatingAiNotices ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-                  <span>Generate AI</span>
-                </button>
-              </div>
-
               {/* Add Custom Notification */}
               <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
                 <h4 className="font-bold text-slate-800 text-sm flex items-center gap-2">
@@ -410,22 +379,41 @@ export const SettingsDrawer: React.FC<Props> = ({
                 </div>
               </div>
 
-              {/* Rotation Speed Control */}
-              <div className="flex items-center justify-between p-4 bg-white rounded-2xl border border-slate-200 shadow-2xs">
-                <div>
-                  <span className="text-sm font-bold text-slate-800">Sidebar Display Speed</span>
-                  <p className="text-xs text-slate-500">How long each notification remains on screen</p>
+              {/* Rotation Speed Control & Notification Font Size Control */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="flex items-center justify-between p-4 bg-white rounded-2xl border border-slate-200 shadow-2xs">
+                  <div>
+                    <span className="text-sm font-bold text-slate-800">Sidebar Display Speed</span>
+                    <p className="text-xs text-slate-500">Duration per announcement</p>
+                  </div>
+                  <select
+                    value={settings.rotationSpeed}
+                    onChange={(e) => onSaveSettings({ rotationSpeed: Number(e.target.value) })}
+                    className="p-2 bg-slate-100 rounded-xl border border-slate-300 text-xs font-bold cursor-pointer"
+                  >
+                    <option value={5000}>5 Seconds</option>
+                    <option value={10000}>10 Seconds (Default)</option>
+                    <option value={15000}>15 Seconds</option>
+                    <option value={30000}>30 Seconds</option>
+                  </select>
                 </div>
-                <select
-                  value={settings.rotationSpeed}
-                  onChange={(e) => onSaveSettings({ rotationSpeed: Number(e.target.value) })}
-                  className="p-2 bg-slate-100 rounded-xl border border-slate-300 text-xs font-bold cursor-pointer"
-                >
-                  <option value={5000}>5 Seconds</option>
-                  <option value={10000}>10 Seconds (Default)</option>
-                  <option value={15000}>15 Seconds</option>
-                  <option value={30000}>30 Seconds</option>
-                </select>
+
+                <div className="flex items-center justify-between p-4 bg-white rounded-2xl border border-slate-200 shadow-2xs">
+                  <div>
+                    <span className="text-sm font-bold text-slate-800">Notification Font Size</span>
+                    <p className="text-xs text-slate-500">Text size on TV sidebar</p>
+                  </div>
+                  <select
+                    value={settings.notificationFontSize || 'medium'}
+                    onChange={(e) => onSaveSettings({ notificationFontSize: e.target.value as any })}
+                    className="p-2 bg-slate-100 rounded-xl border border-slate-300 text-xs font-bold cursor-pointer"
+                  >
+                    <option value="small">Small</option>
+                    <option value="medium">Medium (Default)</option>
+                    <option value="large">Large</option>
+                    <option value="xlarge">Extra Large</option>
+                  </select>
+                </div>
               </div>
 
               {/* Notification Items List with Edit Capability */}
@@ -745,8 +733,8 @@ export const SettingsDrawer: React.FC<Props> = ({
                             {idx + 1}
                           </span>
                           <div>
-                            <p className="text-xs font-mono font-bold text-slate-100">{vId}</p>
-                            <p className="text-[10px] text-slate-400">youtube.com/watch?v={vId}</p>
+                            <p className="text-xs font-semibold text-slate-100">{videoTitlesMap[vId] || `YouTube Video (${vId})`}</p>
+                            <p className="text-[10px] text-slate-400 font-mono">youtube.com/watch?v={vId}</p>
                           </div>
                         </div>
 
@@ -930,6 +918,64 @@ export const SettingsDrawer: React.FC<Props> = ({
                       onChange={(e) => onSaveSettings({ enableWelcomeOverlay: e.target.checked })}
                       className="w-4 h-4 text-emerald-600 rounded cursor-pointer"
                     />
+                  </div>
+                </div>
+              </div>
+
+              {/* SECTION D: CLOSED CAPTIONS (CC) & SPEECH SETTINGS */}
+              <div className="p-5 bg-slate-50 rounded-3xl border border-slate-200 space-y-4">
+                <div className="flex items-center gap-2 pb-2 border-b border-slate-200">
+                  <Sparkles className="w-5 h-5 text-emerald-600" />
+                  <h3 className="font-bold text-base text-slate-800">Closed Captions (CC) & Live Speech</h3>
+                </div>
+
+                <div className="space-y-3">
+                  {/* CC Toggle */}
+                  <div className="flex items-center justify-between p-3.5 bg-white rounded-2xl border border-slate-200">
+                    <div>
+                      <h4 className="font-bold text-slate-800 text-xs">Enable Closed Captions (CC)</h4>
+                      <p className="text-[10px] text-slate-500">Display synchronized video captions on screen</p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={settings.enableClosedCaptions !== false}
+                      onChange={(e) => onSaveSettings({ enableClosedCaptions: e.target.checked })}
+                      className="w-4 h-4 text-emerald-600 rounded cursor-pointer"
+                    />
+                  </div>
+
+                  {/* CC Font Size */}
+                  <div className="flex items-center justify-between p-3.5 bg-white rounded-2xl border border-slate-200">
+                    <div>
+                      <h4 className="font-bold text-slate-800 text-xs">Caption Font Size</h4>
+                      <p className="text-[10px] text-slate-500">Size of subtitle text overlay</p>
+                    </div>
+                    <select
+                      value={settings.captionFontSize || 'medium'}
+                      onChange={(e) => onSaveSettings({ captionFontSize: e.target.value as any })}
+                      className="p-2 bg-slate-100 rounded-xl border border-slate-300 text-xs font-bold cursor-pointer"
+                    >
+                      <option value="small">Small</option>
+                      <option value="medium">Medium (Default)</option>
+                      <option value="large">Large</option>
+                      <option value="xlarge">Extra Large</option>
+                    </select>
+                  </div>
+
+                  {/* CC Position */}
+                  <div className="flex items-center justify-between p-3.5 bg-white rounded-2xl border border-slate-200">
+                    <div>
+                      <h4 className="font-bold text-slate-800 text-xs">Caption Screen Position</h4>
+                      <p className="text-[10px] text-slate-500">Location of subtitles on video display</p>
+                    </div>
+                    <select
+                      value={settings.captionPosition || 'bottom'}
+                      onChange={(e) => onSaveSettings({ captionPosition: e.target.value as any })}
+                      className="p-2 bg-slate-100 rounded-xl border border-slate-300 text-xs font-bold cursor-pointer"
+                    >
+                      <option value="bottom">Bottom of Screen</option>
+                      <option value="top">Top of Screen</option>
+                    </select>
                   </div>
                 </div>
               </div>

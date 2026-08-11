@@ -137,4 +137,8 @@ export const DEFAULT_CLINIC_SETTINGS: ClinicSettings = {
   tvResolutionScale: '1080p',
   preventTvSleep: true,
   mutedByPolicy: false,
+  notificationFontSize: 'medium',
+  enableClosedCaptions: true,
+  captionFontSize: 'medium',
+  captionPosition: 'bottom',
 };

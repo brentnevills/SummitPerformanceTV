@@ -5,6 +5,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { ClinicSettings, VideoPlaylist } from './types';
+import { extractYouTubeId } from './utils/youtube';
 import { DEFAULT_CLINIC_SETTINGS } from './data/defaults';
 import { TvHeartbeatOverlay } from './components/TvHeartbeatOverlay';
 import { StartOverlay } from './components/StartOverlay';
@@ -85,7 +86,8 @@ export default function App() {
       settings.playlists[0];
 
     if (activePl && activePl.videoIds.length > 0) {
-      setVideoIds(activePl.videoIds);
+      const sanitized = activePl.videoIds.map(id => extractYouTubeId(id)).filter(Boolean);
+      setVideoIds(sanitized.length > 0 ? sanitized : ['dJ9A_A4U3Xg']);
     } else {
       setVideoIds(['dJ9A_A4U3Xg', '50kH0f3B0aY', 'inpok4MKVLM']);
     }
@@ -245,6 +247,7 @@ export default function App() {
           primaryColor={settings.primaryColor}
           accentColor={settings.accentColor}
           clockFormat={settings.clockFormat}
+          fontSize={settings.notificationFontSize}
         />
 
         {/* Video Area (Bypasses Embed Restrictions) */}
@@ -255,6 +258,7 @@ export default function App() {
           accentColor={settings.accentColor}
           muted={muted}
           onToggleMute={() => setMuted((prev) => !prev)}
+          settings={settings}
         />
       </div>
 
