@@ -23,10 +23,10 @@ export const StartOverlay: React.FC<Props> = ({
 
   return (
     <div id="start-overlay" className="relative flex flex-col items-center justify-center p-8 bg-slate-950 text-white z-[100000]">
-      {/* Top right settings button on start screen */}
+      {/* Top right settings button on start screen - Hidden unless hovered over */}
       <button
         onClick={onOpenSettings}
-        className="absolute top-6 right-6 flex items-center gap-2 px-4 py-2 bg-slate-800/90 hover:bg-slate-700 text-slate-100 rounded-full border border-slate-700 transition-all cursor-pointer shadow-lg hover:scale-105"
+        className="absolute top-6 right-6 flex items-center gap-2 px-4 py-2 bg-slate-800/90 hover:bg-slate-700 text-slate-100 rounded-full border border-slate-700 transition-all cursor-pointer shadow-lg opacity-0 hover:opacity-100 focus:opacity-100 focus-visible:opacity-100 hover:scale-105"
         title="Open TV Settings & Remote Control"
       >
         <Settings className="w-5 h-5 text-emerald-400" />

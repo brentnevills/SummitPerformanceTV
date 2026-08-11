@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ClinicSettings, ClinicAnnouncement } from '../types';
+import { ClinicSettings, ClinicAnnouncement, VideoPlaylist } from '../types';
 import {
   X,
   Tv,
@@ -7,19 +7,20 @@ import {
   Plus,
   Trash2,
   Play,
-  RotateCcw,
-  Palette,
   Volume2,
   VolumeX,
   Maximize2,
   Check,
   Loader2,
-  ListPlus,
   Radio,
   ArrowUp,
   ArrowDown,
-  ArrowLeft,
-  ArrowRight,
+  Bell,
+  Settings as SettingsIcon,
+  Edit3,
+  FolderPlus,
+  Film,
+  Palette,
 } from 'lucide-react';
 
 interface Props {
@@ -43,20 +44,29 @@ export const SettingsDrawer: React.FC<Props> = ({
   onToggleMute,
   onTriggerWelcomeNow,
 }) => {
-  const [activeTab, setActiveTab] = useState<'remote' | 'announcements' | 'playlist' | 'branding' | 'tv'>('remote');
+  // Three distinct tabs: Notifications, Playlists, and Advanced Settings
+  const [activeTab, setActiveTab] = useState<'notifications' | 'playlists' | 'advanced'>('notifications');
 
-  // Local state for forms
+  // Local state for notifications
   const [newNoticeText, setNewNoticeText] = useState('');
   const [newNoticeCategory, setNewNoticeCategory] = useState<'general' | 'reminder' | 'wellness' | 'social' | 'promo'>('general');
+  const [editingNoticeId, setEditingNoticeId] = useState<string | null>(null);
+  const [editingNoticeText, setEditingNoticeText] = useState('');
+  const [editingNoticeCategory, setEditingNoticeCategory] = useState<'general' | 'reminder' | 'wellness' | 'social' | 'promo'>('general');
   const [generatingAiNotices, setGeneratingAiNotices] = useState(false);
 
+  // Local state for playlists & video management
+  const [newPlaylistTitle, setNewPlaylistTitle] = useState('');
+  const [isCreatingPlaylist, setIsCreatingPlaylist] = useState(false);
+  const [editingPlaylistId, setEditingPlaylistId] = useState<string | null>(null);
+  const [editingPlaylistTitle, setEditingPlaylistTitle] = useState('');
   const [newVideoUrl, setNewVideoUrl] = useState('');
   const [testStreamResult, setTestStreamResult] = useState<any>(null);
   const [testingStream, setTestingStream] = useState(false);
 
   if (!show) return null;
 
-  // Add Announcement
+  // Add Notification
   const handleAddNotice = () => {
     if (!newNoticeText.trim()) return;
     const newNotice: ClinicAnnouncement = {
@@ -70,7 +80,26 @@ export const SettingsDrawer: React.FC<Props> = ({
     setNewNoticeText('');
   };
 
-  // Toggle Announcement Active
+  // Start Editing Notification
+  const handleStartEditNotice = (item: ClinicAnnouncement) => {
+    setEditingNoticeId(item.id);
+    setEditingNoticeText(item.text);
+    setEditingNoticeCategory(item.category || 'general');
+  };
+
+  // Save Edited Notification
+  const handleSaveEditNotice = (id: string) => {
+    if (!editingNoticeText.trim()) return;
+    const updated = settings.infoItems.map((item) =>
+      item.id === id
+        ? { ...item, text: editingNoticeText.trim(), category: editingNoticeCategory }
+        : item
+    );
+    onSaveSettings({ infoItems: updated });
+    setEditingNoticeId(null);
+  };
+
+  // Toggle Notification Active Status
   const handleToggleNotice = (id: string) => {
     const updated = settings.infoItems.map((item) =>
       item.id === id ? { ...item, active: !item.active } : item
@@ -78,13 +107,29 @@ export const SettingsDrawer: React.FC<Props> = ({
     onSaveSettings({ infoItems: updated });
   };
 
-  // Delete Announcement
+  // Move Notification Up or Down
+  const handleMoveNotice = (id: string, direction: 'up' | 'down') => {
+    const items = [...settings.infoItems];
+    const idx = items.findIndex((i) => i.id === id);
+    if (idx === -1) return;
+
+    const targetIdx = direction === 'up' ? idx - 1 : idx + 1;
+    if (targetIdx < 0 || targetIdx >= items.length) return;
+
+    const temp = items[idx];
+    items[idx] = items[targetIdx];
+    items[targetIdx] = temp;
+
+    onSaveSettings({ infoItems: items });
+  };
+
+  // Delete Notification
   const handleDeleteNotice = (id: string) => {
     const updated = settings.infoItems.filter((item) => item.id !== id);
     onSaveSettings({ infoItems: updated });
   };
 
-  // Gemini AI Generate Announcements
+  // Gemini AI Generate Notifications
   const handleGenerateAiNotices = async () => {
     setGeneratingAiNotices(true);
     try {
@@ -114,7 +159,46 @@ export const SettingsDrawer: React.FC<Props> = ({
     }
   };
 
-  // Add Video ID / URL
+  // Create New Playlist
+  const handleCreatePlaylist = () => {
+    if (!newPlaylistTitle.trim()) return;
+    const newPl: VideoPlaylist = {
+      id: `pl_${Date.now()}`,
+      title: newPlaylistTitle.trim(),
+      description: 'Custom Clinic Playlist',
+      videoIds: ['dJ9A_A4U3Xg'], // Default starter video
+    };
+    const updatedPlaylists = [...settings.playlists, newPl];
+    onSaveSettings({ playlists: updatedPlaylists, currentPlaylistId: newPl.id });
+    setNewPlaylistTitle('');
+    setIsCreatingPlaylist(false);
+  };
+
+  // Edit Playlist Title
+  const handleStartEditPlaylistTitle = (pl: VideoPlaylist) => {
+    setEditingPlaylistId(pl.id);
+    setEditingPlaylistTitle(pl.title);
+  };
+
+  const handleSavePlaylistTitle = (id: string) => {
+    if (!editingPlaylistTitle.trim()) return;
+    const updatedPlaylists = settings.playlists.map((pl) =>
+      pl.id === id ? { ...pl, title: editingPlaylistTitle.trim() } : pl
+    );
+    onSaveSettings({ playlists: updatedPlaylists });
+    setEditingPlaylistId(null);
+  };
+
+  // Delete Playlist
+  const handleDeletePlaylist = (id: string) => {
+    if (settings.playlists.length <= 1) return;
+    const updatedPlaylists = settings.playlists.filter((pl) => pl.id !== id);
+    const nextActiveId =
+      settings.currentPlaylistId === id ? updatedPlaylists[0].id : settings.currentPlaylistId;
+    onSaveSettings({ playlists: updatedPlaylists, currentPlaylistId: nextActiveId });
+  };
+
+  // Add Video to Selected Playlist
   const handleAddVideo = () => {
     if (!newVideoUrl.trim()) return;
     let videoId = newVideoUrl.trim();
@@ -124,8 +208,8 @@ export const SettingsDrawer: React.FC<Props> = ({
       videoId = videoId.split('youtu.be/')[1].split('?')[0];
     }
 
-    // Add to current playlist video IDs
-    const currentPl = settings.playlists.find((p) => p.id === settings.currentPlaylistId) || settings.playlists[0];
+    const currentPl =
+      settings.playlists.find((p) => p.id === settings.currentPlaylistId) || settings.playlists[0];
     if (currentPl && !currentPl.videoIds.includes(videoId)) {
       const updatedPlaylists = settings.playlists.map((pl) =>
         pl.id === currentPl.id ? { ...pl, videoIds: [...pl.videoIds, videoId] } : pl
@@ -133,6 +217,42 @@ export const SettingsDrawer: React.FC<Props> = ({
       onSaveSettings({ playlists: updatedPlaylists });
     }
     setNewVideoUrl('');
+  };
+
+  // Rearrange Video Order in Selected Playlist
+  const handleMoveVideo = (vId: string, direction: 'up' | 'down') => {
+    const currentPl =
+      settings.playlists.find((p) => p.id === settings.currentPlaylistId) || settings.playlists[0];
+    if (!currentPl) return;
+
+    const videoIds = [...currentPl.videoIds];
+    const idx = videoIds.indexOf(vId);
+    if (idx === -1) return;
+
+    const targetIdx = direction === 'up' ? idx - 1 : idx + 1;
+    if (targetIdx < 0 || targetIdx >= videoIds.length) return;
+
+    const temp = videoIds[idx];
+    videoIds[idx] = videoIds[targetIdx];
+    videoIds[targetIdx] = temp;
+
+    const updatedPlaylists = settings.playlists.map((pl) =>
+      pl.id === currentPl.id ? { ...pl, videoIds } : pl
+    );
+    onSaveSettings({ playlists: updatedPlaylists });
+  };
+
+  // Remove Video from Playlist
+  const handleRemoveVideo = (vId: string) => {
+    const currentPl =
+      settings.playlists.find((p) => p.id === settings.currentPlaylistId) || settings.playlists[0];
+    if (!currentPl) return;
+
+    const updatedVideoIds = currentPl.videoIds.filter((id) => id !== vId);
+    const updatedPlaylists = settings.playlists.map((pl) =>
+      pl.id === currentPl.id ? { ...pl, videoIds: updatedVideoIds } : pl
+    );
+    onSaveSettings({ playlists: updatedPlaylists });
   };
 
   // Test Bypass Extraction
@@ -163,6 +283,9 @@ export const SettingsDrawer: React.FC<Props> = ({
     }
   };
 
+  const activePlaylist =
+    settings.playlists.find((p) => p.id === settings.currentPlaylistId) || settings.playlists[0];
+
   return (
     <div className="fixed inset-0 z-[100000] bg-slate-950/80 backdrop-blur-md flex justify-end animate-fade-in">
       <div className="w-full max-w-2xl bg-white h-full shadow-2xl flex flex-col text-slate-800 border-l border-slate-200">
@@ -171,8 +294,8 @@ export const SettingsDrawer: React.FC<Props> = ({
           <div className="flex items-center gap-3">
             <Tv className="w-7 h-7 text-emerald-400" />
             <div>
-              <h2 className="text-xl font-bold">Bolva TV Signage Control</h2>
-              <p className="text-xs text-slate-400">Manage announcements, playlists, and TV settings</p>
+              <h2 className="text-xl font-bold">Summit TV Signage Control</h2>
+              <p className="text-xs text-slate-400">Manage clinic notifications and TV settings</p>
             </div>
           </div>
           <button
@@ -183,164 +306,56 @@ export const SettingsDrawer: React.FC<Props> = ({
           </button>
         </div>
 
-        {/* Tab Selector */}
-        <div className="flex border-b border-slate-200 bg-slate-50 overflow-x-auto">
+        {/* THREE DISTINCT TABS: Notifications, Playlists, Advanced Settings */}
+        <div className="flex border-b border-slate-200 bg-slate-100 p-1.5 gap-2">
           <button
-            onClick={() => setActiveTab('remote')}
-            className={`flex-1 min-w-[100px] py-3 px-4 text-xs font-bold uppercase tracking-wider border-b-2 transition-all cursor-pointer flex items-center justify-center gap-2 ${
-              activeTab === 'remote'
-                ? 'border-emerald-500 text-emerald-700 bg-white'
-                : 'border-transparent text-slate-500 hover:text-slate-900'
+            onClick={() => setActiveTab('notifications')}
+            className={`flex-1 py-3 px-3 text-xs font-bold uppercase tracking-wider rounded-xl transition-all cursor-pointer flex items-center justify-center gap-2 shadow-xs ${
+              activeTab === 'notifications'
+                ? 'bg-emerald-600 text-white shadow-md'
+                : 'bg-white text-slate-600 hover:text-slate-900 hover:bg-slate-50'
             }`}
           >
-            <Radio className="w-4 h-4" />
-            <span>TV Remote</span>
+            <Bell className="w-4 h-4" />
+            <span>Notifications ({settings.infoItems.filter((i) => i.active).length})</span>
           </button>
 
           <button
-            onClick={() => setActiveTab('announcements')}
-            className={`flex-1 min-w-[100px] py-3 px-4 text-xs font-bold uppercase tracking-wider border-b-2 transition-all cursor-pointer flex items-center justify-center gap-2 ${
-              activeTab === 'announcements'
-                ? 'border-emerald-500 text-emerald-700 bg-white'
-                : 'border-transparent text-slate-500 hover:text-slate-900'
+            onClick={() => setActiveTab('playlists')}
+            className={`flex-1 py-3 px-3 text-xs font-bold uppercase tracking-wider rounded-xl transition-all cursor-pointer flex items-center justify-center gap-2 shadow-xs ${
+              activeTab === 'playlists'
+                ? 'bg-emerald-600 text-white shadow-md'
+                : 'bg-white text-slate-600 hover:text-slate-900 hover:bg-slate-50'
             }`}
           >
-            <ListPlus className="w-4 h-4" />
-            <span>Notices ({settings.infoItems.filter((i) => i.active).length})</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('playlist')}
-            className={`flex-1 min-w-[100px] py-3 px-4 text-xs font-bold uppercase tracking-wider border-b-2 transition-all cursor-pointer flex items-center justify-center gap-2 ${
-              activeTab === 'playlist'
-                ? 'border-emerald-500 text-emerald-700 bg-white'
-                : 'border-transparent text-slate-500 hover:text-slate-900'
-            }`}
-          >
-            <Play className="w-4 h-4" />
+            <Film className="w-4 h-4" />
             <span>Playlists</span>
           </button>
 
           <button
-            onClick={() => setActiveTab('branding')}
-            className={`flex-1 min-w-[100px] py-3 px-4 text-xs font-bold uppercase tracking-wider border-b-2 transition-all cursor-pointer flex items-center justify-center gap-2 ${
-              activeTab === 'branding'
-                ? 'border-emerald-500 text-emerald-700 bg-white'
-                : 'border-transparent text-slate-500 hover:text-slate-900'
+            onClick={() => setActiveTab('advanced')}
+            className={`flex-1 py-3 px-3 text-xs font-bold uppercase tracking-wider rounded-xl transition-all cursor-pointer flex items-center justify-center gap-2 shadow-xs ${
+              activeTab === 'advanced'
+                ? 'bg-emerald-600 text-white shadow-md'
+                : 'bg-white text-slate-600 hover:text-slate-900 hover:bg-slate-50'
             }`}
           >
-            <Palette className="w-4 h-4" />
-            <span>Branding</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('tv')}
-            className={`flex-1 min-w-[100px] py-3 px-4 text-xs font-bold uppercase tracking-wider border-b-2 transition-all cursor-pointer flex items-center justify-center gap-2 ${
-              activeTab === 'tv'
-                ? 'border-emerald-500 text-emerald-700 bg-white'
-                : 'border-transparent text-slate-500 hover:text-slate-900'
-            }`}
-          >
-            <Tv className="w-4 h-4" />
-            <span>TV Guard</span>
+            <SettingsIcon className="w-4 h-4" />
+            <span>Advanced Settings</span>
           </button>
         </div>
 
         {/* Content Area */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
-          {/* TAB 1: TV REMOTE D-PAD */}
-          {activeTab === 'remote' && (
-            <div className="space-y-6 text-center">
-              <div className="bg-slate-900 text-white p-6 rounded-3xl shadow-xl max-w-sm mx-auto space-y-6">
-                <div className="text-xs font-mono text-emerald-400 uppercase tracking-widest">
-                  Virtual Bolva TV Remote
-                </div>
-
-                {/* D-Pad */}
-                <div className="grid grid-cols-3 gap-2 w-48 h-48 mx-auto items-center justify-center p-2 bg-slate-800 rounded-full shadow-inner border border-slate-700">
-                  <div></div>
-                  <button
-                    onClick={() => console.log('Remote UP')}
-                    className="p-3 bg-slate-700 hover:bg-slate-600 rounded-2xl flex items-center justify-center text-white active:scale-90"
-                  >
-                    <ArrowUp className="w-6 h-6" />
-                  </button>
-                  <div></div>
-
-                  <button
-                    onClick={() => console.log('Remote LEFT')}
-                    className="p-3 bg-slate-700 hover:bg-slate-600 rounded-2xl flex items-center justify-center text-white active:scale-90"
-                  >
-                    <ArrowLeft className="w-6 h-6" />
-                  </button>
-
-                  <button
-                    onClick={onNextVideo}
-                    className="p-4 bg-emerald-600 hover:bg-emerald-500 rounded-full font-bold text-white text-xs tracking-wider shadow-lg active:scale-90"
-                  >
-                    OK
-                  </button>
-
-                  <button
-                    onClick={() => console.log('Remote RIGHT')}
-                    className="p-3 bg-slate-700 hover:bg-slate-600 rounded-2xl flex items-center justify-center text-white active:scale-90"
-                  >
-                    <ArrowRight className="w-6 h-6" />
-                  </button>
-
-                  <div></div>
-                  <button
-                    onClick={() => console.log('Remote DOWN')}
-                    className="p-3 bg-slate-700 hover:bg-slate-600 rounded-2xl flex items-center justify-center text-white active:scale-90"
-                  >
-                    <ArrowDown className="w-6 h-6" />
-                  </button>
-                  <div></div>
-                </div>
-
-                {/* Remote Quick Buttons */}
-                <div className="grid grid-cols-2 gap-3 pt-2">
-                  <button
-                    onClick={onNextVideo}
-                    className="py-3 px-4 bg-slate-800 hover:bg-slate-700 rounded-2xl text-xs font-bold uppercase tracking-wider text-white flex items-center justify-center gap-2"
-                  >
-                    <Play className="w-4 h-4 text-emerald-400" />
-                    <span>Skip Video</span>
-                  </button>
-
-                  <button
-                    onClick={onToggleMute}
-                    className="py-3 px-4 bg-slate-800 hover:bg-slate-700 rounded-2xl text-xs font-bold uppercase tracking-wider text-white flex items-center justify-center gap-2"
-                  >
-                    {muted ? <VolumeX className="w-4 h-4 text-amber-400" /> : <Volume2 className="w-4 h-4 text-emerald-400" />}
-                    <span>{muted ? 'Unmute' : 'Mute'}</span>
-                  </button>
-
-                  <button
-                    onClick={onTriggerWelcomeNow}
-                    className="py-3 px-4 bg-slate-800 hover:bg-slate-700 rounded-2xl text-xs font-bold uppercase tracking-wider text-white flex items-center justify-center gap-2 col-span-2"
-                  >
-                    <Sparkles className="w-4 h-4 text-amber-400" />
-                    <span>Test Welcome Overlay</span>
-                  </button>
-                </div>
-              </div>
-
-              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 text-xs text-slate-600">
-                💡 Bolva TV remotes can also navigate using standard keyboard arrow keys and Enter.
-              </div>
-            </div>
-          )}
-
-          {/* TAB 2: ANNOUNCEMENT NOTICES */}
-          {activeTab === 'announcements' && (
+          {/* TAB 1: NOTIFICATIONS (ANNOUNCEMENTS & EDITING) */}
+          {activeTab === 'notifications' && (
             <div className="space-y-6">
-              {/* Gemini AI Generator Button */}
+              {/* Gemini AI Notice Generator */}
               <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-200 flex items-center justify-between">
                 <div>
                   <h4 className="font-bold text-emerald-900 text-sm flex items-center gap-2">
                     <Sparkles className="w-4 h-4 text-emerald-600" />
-                    <span>Gemini AI Notice Generator</span>
+                    <span>Gemini AI Notification Generator</span>
                   </h4>
                   <p className="text-xs text-emerald-700 mt-0.5">
                     Auto-generate wellness tips and patient reminders tailored to your clinic.
@@ -356,9 +371,12 @@ export const SettingsDrawer: React.FC<Props> = ({
                 </button>
               </div>
 
-              {/* Add Custom Announcement */}
+              {/* Add Custom Notification */}
               <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
-                <h4 className="font-bold text-slate-800 text-sm">Add New Notice</h4>
+                <h4 className="font-bold text-slate-800 text-sm flex items-center gap-2">
+                  <Plus className="w-4 h-4 text-emerald-600" />
+                  <span>Add New Notification</span>
+                </h4>
                 <textarea
                   value={newNoticeText}
                   onChange={(e) => setNewNoticeText(e.target.value)}
@@ -367,38 +385,41 @@ export const SettingsDrawer: React.FC<Props> = ({
                   rows={2}
                 />
                 <div className="flex items-center justify-between gap-3">
-                  <select
-                    value={newNoticeCategory}
-                    onChange={(e) => setNewNoticeCategory(e.target.value as any)}
-                    className="p-2 bg-white rounded-xl border border-slate-300 text-xs font-medium"
-                  >
-                    <option value="general">General</option>
-                    <option value="reminder">Reminder</option>
-                    <option value="wellness">Wellness</option>
-                    <option value="social">Social</option>
-                    <option value="promo">Promo</option>
-                  </select>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-slate-500 font-medium">Category:</span>
+                    <select
+                      value={newNoticeCategory}
+                      onChange={(e) => setNewNoticeCategory(e.target.value as any)}
+                      className="p-2 bg-white rounded-xl border border-slate-300 text-xs font-medium cursor-pointer"
+                    >
+                      <option value="general">General</option>
+                      <option value="reminder">Reminder</option>
+                      <option value="wellness">Wellness</option>
+                      <option value="social">Social</option>
+                      <option value="promo">Promo</option>
+                    </select>
+                  </div>
 
                   <button
                     onClick={handleAddNotice}
-                    className="px-4 py-2 bg-slate-900 text-white text-xs font-bold rounded-xl hover:bg-slate-800 cursor-pointer flex items-center gap-2"
+                    className="px-4 py-2 bg-slate-900 text-white text-xs font-bold rounded-xl hover:bg-slate-800 cursor-pointer flex items-center gap-2 shadow-sm"
                   >
                     <Plus className="w-4 h-4" />
-                    <span>Add Notice</span>
+                    <span>Add Notification</span>
                   </button>
                 </div>
               </div>
 
               {/* Rotation Speed Control */}
-              <div className="flex items-center justify-between p-4 bg-white rounded-2xl border border-slate-200">
+              <div className="flex items-center justify-between p-4 bg-white rounded-2xl border border-slate-200 shadow-2xs">
                 <div>
-                  <span className="text-sm font-bold text-slate-800">Rotation Speed</span>
-                  <p className="text-xs text-slate-500">Duration each announcement displays</p>
+                  <span className="text-sm font-bold text-slate-800">Sidebar Display Speed</span>
+                  <p className="text-xs text-slate-500">How long each notification remains on screen</p>
                 </div>
                 <select
                   value={settings.rotationSpeed}
                   onChange={(e) => onSaveSettings({ rotationSpeed: Number(e.target.value) })}
-                  className="p-2 bg-slate-100 rounded-xl border border-slate-300 text-xs font-bold"
+                  className="p-2 bg-slate-100 rounded-xl border border-slate-300 text-xs font-bold cursor-pointer"
                 >
                   <option value={5000}>5 Seconds</option>
                   <option value={10000}>10 Seconds (Default)</option>
@@ -407,317 +428,510 @@ export const SettingsDrawer: React.FC<Props> = ({
                 </select>
               </div>
 
-              {/* Notice List */}
+              {/* Notification Items List with Edit Capability */}
               <div className="space-y-3">
-                <h4 className="font-bold text-slate-800 text-sm">Active Notices List</h4>
-                {settings.infoItems.map((item) => (
-                  <div
-                    key={item.id}
-                    className={`p-4 rounded-2xl border transition-all flex items-start justify-between gap-3 ${
-                      item.active ? 'bg-white border-slate-200 shadow-sm' : 'bg-slate-100 border-slate-200 opacity-60'
-                    }`}
-                  >
-                    <div className="space-y-1 flex-1">
-                      <p className="text-sm font-semibold text-slate-800 leading-snug">{item.text}</p>
-                      <span className="inline-block text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 bg-slate-100 text-slate-600 rounded">
-                        {item.category || 'notice'}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-2 pt-1">
-                      <button
-                        onClick={() => handleToggleNotice(item.id)}
-                        className={`p-1.5 rounded-lg cursor-pointer transition-colors ${
-                          item.active ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'
-                        }`}
-                        title={item.active ? 'Hide Notice' : 'Show Notice'}
-                      >
-                        <Check className="w-4 h-4" />
-                      </button>
-
-                      <button
-                        onClick={() => handleDeleteNotice(item.id)}
-                        className="p-1.5 hover:bg-red-100 text-slate-400 hover:text-red-600 rounded-lg cursor-pointer transition-colors"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* TAB 3: PLAYLIST MANAGER & EMBED BYPASS TEST */}
-          {activeTab === 'playlist' && (
-            <div className="space-y-6">
-              {/* Select Active Playlist */}
-              <div className="space-y-2">
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-600">Active Video Playlist</label>
-                <select
-                  value={settings.currentPlaylistId}
-                  onChange={(e) => onSaveSettings({ currentPlaylistId: e.target.value })}
-                  className="w-full p-3 bg-slate-50 border border-slate-300 rounded-xl text-sm font-semibold text-slate-800"
-                >
-                  {settings.playlists.map((pl) => (
-                    <option key={pl.id} value={pl.id}>
-                      {pl.title} ({pl.videoIds.length} videos)
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Stream Bypass Tester */}
-              <div className="p-4 bg-slate-900 text-white rounded-2xl space-y-3">
-                <div className="flex items-center gap-2">
-                  <Sparkles className="w-5 h-5 text-emerald-400" />
-                  <h4 className="font-bold text-sm">Add YouTube Video / Test Bypass</h4>
-                </div>
-                <p className="text-xs text-slate-300">
-                  Paste YouTube video URL or ID to test direct MP4 extraction that bypasses embedding block errors.
-                </p>
-
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={newVideoUrl}
-                    onChange={(e) => setNewVideoUrl(e.target.value)}
-                    placeholder="https://www.youtube.com/watch?v=dJ9A_A4U3Xg"
-                    className="flex-1 p-2.5 bg-slate-800 text-white border border-slate-700 rounded-xl text-xs font-mono focus:outline-none focus:ring-2 focus:ring-emerald-400"
-                  />
-                  <button
-                    onClick={handleTestStreamBypass}
-                    disabled={testingStream}
-                    className="px-3 py-2 bg-slate-700 hover:bg-slate-600 text-xs font-bold rounded-xl cursor-pointer disabled:opacity-50"
-                  >
-                    {testingStream ? 'Testing...' : 'Test Stream'}
-                  </button>
-                  <button
-                    onClick={handleAddVideo}
-                    className="px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl cursor-pointer"
-                  >
-                    Add
-                  </button>
+                <div className="flex items-center justify-between">
+                  <h4 className="font-bold text-slate-800 text-sm flex items-center gap-2">
+                    <Bell className="w-4 h-4 text-emerald-600" />
+                    <span>Manage & Edit Notifications ({settings.infoItems.length})</span>
+                  </h4>
                 </div>
 
-                {testStreamResult && (
-                  <div className="p-3 bg-slate-800 rounded-xl text-xs font-mono border border-slate-700 space-y-1">
-                    <p className="text-emerald-400 font-bold">
-                      Status: {testStreamResult.isDirectMedia ? 'Direct Stream Extracted (Bypassed!)' : 'IFrame Fallback Ready'}
-                    </p>
-                    {testStreamResult.title && <p className="text-slate-200">Title: {testStreamResult.title}</p>}
-                    {testStreamResult.url && (
-                      <p className="text-slate-400 truncate">URL: {testStreamResult.url}</p>
-                    )}
-                  </div>
-                )}
-              </div>
+                {settings.infoItems.map((item, idx) => {
+                  const isEditing = editingNoticeId === item.id;
 
-              {/* Current Playlist Items */}
-              <div className="space-y-3">
-                <h4 className="font-bold text-slate-800 text-sm">Videos in Selected Playlist</h4>
-                {settings.playlists
-                  .find((p) => p.id === settings.currentPlaylistId)
-                  ?.videoIds.map((vId, idx) => (
-                    <div key={vId} className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <span className="w-6 h-6 rounded-full bg-slate-200 text-slate-700 text-xs font-bold flex items-center justify-center">
-                          {idx + 1}
-                        </span>
-                        <div>
-                          <p className="text-xs font-mono font-bold text-slate-800">{vId}</p>
-                          <p className="text-[10px] text-slate-500">https://youtube.com/watch?v={vId}</p>
+                  if (isEditing) {
+                    return (
+                      <div
+                        key={item.id}
+                        className="p-4 bg-emerald-50/80 rounded-2xl border-2 border-emerald-500 space-y-3 shadow-md animate-fade-in"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-emerald-800 uppercase tracking-wider">
+                            Editing Notification #{idx + 1}
+                          </span>
+                          <span className="text-[10px] bg-emerald-200 text-emerald-900 px-2 py-0.5 rounded font-bold">
+                            Live Edit
+                          </span>
+                        </div>
+
+                        <textarea
+                          value={editingNoticeText}
+                          onChange={(e) => setEditingNoticeText(e.target.value)}
+                          className="w-full p-3 bg-white rounded-xl border border-emerald-300 text-sm text-slate-900 font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                          rows={2}
+                        />
+
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-slate-600 font-medium">Category:</span>
+                            <select
+                              value={editingNoticeCategory}
+                              onChange={(e) => setEditingNoticeCategory(e.target.value as any)}
+                              className="p-2 bg-white rounded-xl border border-emerald-300 text-xs font-bold"
+                            >
+                              <option value="general">General</option>
+                              <option value="reminder">Reminder</option>
+                              <option value="wellness">Wellness</option>
+                              <option value="social">Social</option>
+                              <option value="promo">Promo</option>
+                            </select>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => setEditingNoticeId(null)}
+                              className="px-3 py-1.5 bg-slate-200 text-slate-700 text-xs font-bold rounded-xl hover:bg-slate-300 cursor-pointer"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              onClick={() => handleSaveEditNotice(item.id)}
+                              className="px-4 py-1.5 bg-emerald-600 text-white text-xs font-bold rounded-xl hover:bg-emerald-700 cursor-pointer flex items-center gap-1 shadow-sm"
+                            >
+                              <Check className="w-3.5 h-3.5" />
+                              <span>Save Changes</span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div
+                      key={item.id}
+                      className={`p-4 rounded-2xl border transition-all flex items-start justify-between gap-3 ${
+                        item.active ? 'bg-white border-slate-200 shadow-sm' : 'bg-slate-100 border-slate-200 opacity-60'
+                      }`}
+                    >
+                      <div className="space-y-1.5 flex-1">
+                        <p className="text-sm font-semibold text-slate-800 leading-snug">{item.text}</p>
+                        <div className="flex items-center gap-2">
+                          <span className="inline-block text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 bg-slate-100 text-slate-600 rounded">
+                            {item.category || 'general'}
+                          </span>
+                          {!item.active && (
+                            <span className="text-[10px] font-bold uppercase text-amber-700 bg-amber-100 px-2 py-0.5 rounded">
+                              Disabled
+                            </span>
+                          )}
                         </div>
                       </div>
 
+                      <div className="flex items-center gap-1 pt-0.5">
+                        {/* Order Buttons */}
+                        <button
+                          onClick={() => handleMoveNotice(item.id, 'up')}
+                          disabled={idx === 0}
+                          className="p-1.5 text-slate-400 hover:text-slate-800 disabled:opacity-30 rounded cursor-pointer hover:bg-slate-100"
+                          title="Move Up"
+                        >
+                          <ArrowUp className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => handleMoveNotice(item.id, 'down')}
+                          disabled={idx === settings.infoItems.length - 1}
+                          className="p-1.5 text-slate-400 hover:text-slate-800 disabled:opacity-30 rounded cursor-pointer hover:bg-slate-100"
+                          title="Move Down"
+                        >
+                          <ArrowDown className="w-3.5 h-3.5" />
+                        </button>
+
+                        {/* Edit Button */}
+                        <button
+                          onClick={() => handleStartEditNotice(item)}
+                          className="p-1.5 hover:bg-emerald-50 text-slate-500 hover:text-emerald-700 rounded-lg cursor-pointer transition-colors"
+                          title="Edit Notification"
+                        >
+                          <Edit3 className="w-4 h-4" />
+                        </button>
+
+                        {/* Active Toggle Button */}
+                        <button
+                          onClick={() => handleToggleNotice(item.id)}
+                          className={`p-1.5 rounded-lg cursor-pointer transition-colors ${
+                            item.active ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'
+                          }`}
+                          title={item.active ? 'Disable Notification' : 'Enable Notification'}
+                        >
+                          <Check className="w-4 h-4" />
+                        </button>
+
+                        {/* Delete Button */}
+                        <button
+                          onClick={() => handleDeleteNotice(item.id)}
+                          className="p-1.5 hover:bg-red-100 text-slate-400 hover:text-red-600 rounded-lg cursor-pointer transition-colors"
+                          title="Delete Notification"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* TAB 2: PLAYLISTS & VIDEO ORDER MANAGEMENT */}
+          {activeTab === 'playlists' && (
+            <div className="space-y-6">
+              <div className="p-5 bg-slate-900 text-white rounded-3xl space-y-6 shadow-xl border border-slate-800">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+                  <div className="flex items-center gap-2">
+                    <Film className="w-5 h-5 text-emerald-400" />
+                    <div>
+                      <h3 className="font-bold text-base text-white">Playlists & Video Order</h3>
+                      <p className="text-xs text-slate-400">Manage playlists, edit titles, and reorder videos</p>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => setIsCreatingPlaylist((prev) => !prev)}
+                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl cursor-pointer flex items-center gap-1.5 shadow-sm"
+                  >
+                    <FolderPlus className="w-4 h-4" />
+                    <span>New Playlist</span>
+                  </button>
+                </div>
+
+                {/* Form to Create New Playlist */}
+                {isCreatingPlaylist && (
+                  <div className="p-4 bg-slate-800 rounded-2xl border border-slate-700 space-y-3 animate-fade-in">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-400">
+                      Create New Playlist
+                    </h4>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={newPlaylistTitle}
+                        onChange={(e) => setNewPlaylistTitle(e.target.value)}
+                        placeholder="e.g. Upper Body Rehabilitation"
+                        className="flex-1 p-2.5 bg-slate-900 border border-slate-700 text-white text-xs rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                      />
                       <button
-                        onClick={() => {
-                          const currentPl = settings.playlists.find((p) => p.id === settings.currentPlaylistId);
-                          if (!currentPl) return;
-                          const updatedVideoIds = currentPl.videoIds.filter((id) => id !== vId);
-                          const updatedPlaylists = settings.playlists.map((pl) =>
-                            pl.id === currentPl.id ? { ...pl, videoIds: updatedVideoIds } : pl
-                          );
-                          onSaveSettings({ playlists: updatedPlaylists });
-                        }}
-                        className="p-1.5 text-slate-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors"
+                        onClick={handleCreatePlaylist}
+                        className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl cursor-pointer"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        Create
                       </button>
                     </div>
-                  ))}
-              </div>
-            </div>
-          )}
-
-          {/* TAB 4: CLINIC BRANDING */}
-          {activeTab === 'branding' && (
-            <div className="space-y-4">
-              <div>
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-600">Clinic Name</label>
-                <input
-                  type="text"
-                  value={settings.clinicName}
-                  onChange={(e) => onSaveSettings({ clinicName: e.target.value })}
-                  className="w-full p-3 bg-slate-50 border border-slate-300 rounded-xl text-sm font-semibold text-slate-800 mt-1"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-600">Tagline / Specialty</label>
-                <input
-                  type="text"
-                  value={settings.tagline}
-                  onChange={(e) => onSaveSettings({ tagline: e.target.value })}
-                  className="w-full p-3 bg-slate-50 border border-slate-300 rounded-xl text-sm font-semibold text-slate-800 mt-1"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-xs font-bold uppercase tracking-wider text-slate-600">Primary Theme Color</label>
-                  <div className="flex items-center gap-2 mt-1">
-                    <input
-                      type="color"
-                      value={settings.primaryColor}
-                      onChange={(e) => onSaveSettings({ primaryColor: e.target.value })}
-                      className="w-10 h-10 rounded-xl border border-slate-300 cursor-pointer"
-                    />
-                    <input
-                      type="text"
-                      value={settings.primaryColor}
-                      onChange={(e) => onSaveSettings({ primaryColor: e.target.value })}
-                      className="flex-1 p-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono"
-                    />
                   </div>
-                </div>
+                )}
 
-                <div>
-                  <label className="text-xs font-bold uppercase tracking-wider text-slate-600">Accent Theme Color</label>
-                  <div className="flex items-center gap-2 mt-1">
-                    <input
-                      type="color"
-                      value={settings.accentColor}
-                      onChange={(e) => onSaveSettings({ accentColor: e.target.value })}
-                      className="w-10 h-10 rounded-xl border border-slate-300 cursor-pointer"
-                    />
-                    <input
-                      type="text"
-                      value={settings.accentColor}
-                      onChange={(e) => onSaveSettings({ accentColor: e.target.value })}
-                      className="flex-1 p-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4 pt-2">
-                <div>
-                  <label className="text-xs font-bold uppercase tracking-wider text-slate-600">Phone</label>
-                  <input
-                    type="text"
-                    value={settings.phone}
-                    onChange={(e) => onSaveSettings({ phone: e.target.value })}
-                    className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-xs font-bold uppercase tracking-wider text-slate-600">Location / City</label>
-                  <input
-                    type="text"
-                    value={settings.address}
-                    onChange={(e) => onSaveSettings({ address: e.target.value })}
-                    className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs"
-                  />
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* TAB 5: TV GUARD & KIOSK SETTINGS */}
-          {activeTab === 'tv' && (
-            <div className="space-y-6">
-              {/* Anti-Burn-In Settings */}
-              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h4 className="font-bold text-slate-800 text-sm">OLED Anti-Burn-In Noise Filter</h4>
-                    <p className="text-xs text-slate-500">Shifts sub-pixels periodically to prevent TV screen burn-in</p>
-                  </div>
-                  <input
-                    type="checkbox"
-                    checked={settings.enableAntiBurnIn}
-                    onChange={(e) => onSaveSettings({ enableAntiBurnIn: e.target.checked })}
-                    className="w-5 h-5 text-emerald-600 rounded cursor-pointer"
-                  />
-                </div>
-
-                {settings.enableAntiBurnIn && (
-                  <div>
-                    <label className="text-xs font-medium text-slate-600">
-                      Noise Opacity: {(settings.antiBurnInOpacity * 100).toFixed(1)}%
+                {/* Select Active Playlist & Edit Name */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                      Active Playlist
                     </label>
+                    {activePlaylist && editingPlaylistId !== activePlaylist.id && (
+                      <button
+                        onClick={() => handleStartEditPlaylistTitle(activePlaylist)}
+                        className="text-xs font-semibold text-emerald-400 hover:text-emerald-300 flex items-center gap-1 cursor-pointer"
+                      >
+                        <Edit3 className="w-3.5 h-3.5" />
+                        <span>Edit Playlist Name</span>
+                      </button>
+                    )}
+                  </div>
+
+                  {editingPlaylistId === activePlaylist?.id ? (
+                    <div className="flex items-center gap-2 p-3 bg-slate-800 rounded-2xl border border-emerald-500">
+                      <input
+                        type="text"
+                        value={editingPlaylistTitle}
+                        onChange={(e) => setEditingPlaylistTitle(e.target.value)}
+                        className="flex-1 p-2 bg-slate-900 border border-slate-700 rounded-xl text-xs font-bold text-white focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                      />
+                      <button
+                        onClick={() => handleSavePlaylistTitle(activePlaylist.id)}
+                        className="px-3 py-2 bg-emerald-600 text-white text-xs font-bold rounded-xl hover:bg-emerald-500 cursor-pointer"
+                      >
+                        Save
+                      </button>
+                      <button
+                        onClick={() => setEditingPlaylistId(null)}
+                        className="px-3 py-2 bg-slate-700 text-slate-300 text-xs font-bold rounded-xl hover:bg-slate-600 cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex gap-2">
+                      <select
+                        value={settings.currentPlaylistId}
+                        onChange={(e) => onSaveSettings({ currentPlaylistId: e.target.value })}
+                        className="flex-1 p-3 bg-slate-800 border border-slate-700 rounded-xl text-sm font-bold text-white cursor-pointer"
+                      >
+                        {settings.playlists.map((pl) => (
+                          <option key={pl.id} value={pl.id}>
+                            {pl.title} ({pl.videoIds.length} videos)
+                          </option>
+                        ))}
+                      </select>
+
+                      {settings.playlists.length > 1 && (
+                        <button
+                          onClick={() => handleDeletePlaylist(settings.currentPlaylistId)}
+                          className="px-3 py-3 bg-red-950/60 hover:bg-red-900 border border-red-800 text-red-300 rounded-xl cursor-pointer transition-colors"
+                          title="Delete Playlist"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Add Video URL/ID to Current Playlist */}
+                <div className="space-y-2 pt-2 border-t border-slate-800">
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                    Add Video to Playlist
+                  </label>
+                  <div className="flex gap-2">
                     <input
-                      type="range"
-                      min="0.005"
-                      max="0.05"
-                      step="0.005"
-                      value={settings.antiBurnInOpacity}
-                      onChange={(e) => onSaveSettings({ antiBurnInOpacity: Number(e.target.value) })}
-                      className="w-full mt-1 accent-emerald-600 cursor-pointer"
+                      type="text"
+                      value={newVideoUrl}
+                      onChange={(e) => setNewVideoUrl(e.target.value)}
+                      placeholder="YouTube URL or Video ID (e.g. dJ9A_A4U3Xg)"
+                      className="flex-1 p-2.5 bg-slate-800 text-white border border-slate-700 rounded-xl text-xs font-mono focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                    />
+                    <button
+                      onClick={handleTestStreamBypass}
+                      disabled={testingStream}
+                      className="px-3 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-xs font-bold rounded-xl cursor-pointer disabled:opacity-50"
+                    >
+                      {testingStream ? 'Testing...' : 'Test Stream'}
+                    </button>
+                    <button
+                      onClick={handleAddVideo}
+                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl cursor-pointer"
+                    >
+                      Add
+                    </button>
+                  </div>
+
+                  {testStreamResult && (
+                    <div className="p-3 bg-slate-800 rounded-xl text-xs font-mono border border-slate-700 space-y-1">
+                      <p className="text-emerald-400 font-bold">
+                        Status: {testStreamResult.isDirectMedia ? 'Direct Stream Extracted' : 'IFrame Fallback Ready'}
+                      </p>
+                      {testStreamResult.title && <p className="text-slate-200">Title: {testStreamResult.title}</p>}
+                    </div>
+                  )}
+                </div>
+
+                {/* Video Rearrange & Order List */}
+                <div className="space-y-3 pt-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                      Rearrange Video Playback Order
+                    </span>
+                    <span className="text-[10px] font-mono text-slate-400">
+                      {activePlaylist?.videoIds.length || 0} Videos
+                    </span>
+                  </div>
+
+                  <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                    {activePlaylist?.videoIds.map((vId, idx) => (
+                      <div
+                        key={vId}
+                        className="p-3 bg-slate-800 rounded-2xl border border-slate-700/80 flex items-center justify-between gap-3 shadow-xs"
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className="w-6 h-6 rounded-full bg-slate-700 text-emerald-400 text-xs font-bold flex items-center justify-center font-mono">
+                            {idx + 1}
+                          </span>
+                          <div>
+                            <p className="text-xs font-mono font-bold text-slate-100">{vId}</p>
+                            <p className="text-[10px] text-slate-400">youtube.com/watch?v={vId}</p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1">
+                          {/* Move Up */}
+                          <button
+                            onClick={() => handleMoveVideo(vId, 'up')}
+                            disabled={idx === 0}
+                            className="p-2 bg-slate-700 hover:bg-slate-600 disabled:opacity-20 text-slate-200 rounded-xl cursor-pointer transition-all"
+                            title="Move Video Up"
+                          >
+                            <ArrowUp className="w-4 h-4" />
+                          </button>
+
+                          {/* Move Down */}
+                          <button
+                            onClick={() => handleMoveVideo(vId, 'down')}
+                            disabled={idx === activePlaylist.videoIds.length - 1}
+                            className="p-2 bg-slate-700 hover:bg-slate-600 disabled:opacity-20 text-slate-200 rounded-xl cursor-pointer transition-all"
+                            title="Move Video Down"
+                          >
+                            <ArrowDown className="w-4 h-4" />
+                          </button>
+
+                          {/* Delete Video */}
+                          <button
+                            onClick={() => handleRemoveVideo(vId)}
+                            className="p-2 bg-slate-700 hover:bg-red-900/60 hover:text-red-300 text-slate-400 rounded-xl cursor-pointer transition-all"
+                            title="Remove Video"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 3: ADVANCED SETTINGS (BRANDING, TV REMOTES & DISPLAY GUARDS) */}
+          {activeTab === 'advanced' && (
+            <div className="space-y-6">
+              {/* SECTION B: CLINIC BRANDING SETTINGS */}
+              <div className="p-5 bg-slate-50 rounded-3xl border border-slate-200 space-y-4">
+                <div className="flex items-center gap-2 pb-2 border-b border-slate-200">
+                  <Palette className="w-5 h-5 text-emerald-600" />
+                  <h3 className="font-bold text-base text-slate-800">Clinic Branding & Info</h3>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-bold uppercase tracking-wider text-slate-600">Clinic Name</label>
+                    <input
+                      type="text"
+                      value={settings.clinicName}
+                      onChange={(e) => onSaveSettings({ clinicName: e.target.value })}
+                      className="w-full p-2.5 bg-white border border-slate-300 rounded-xl text-xs font-semibold text-slate-800 mt-1"
                     />
                   </div>
-                )}
-              </div>
 
-              {/* Welcome Overlay Interval */}
-              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
-                <div className="flex items-center justify-between">
                   <div>
-                    <h4 className="font-bold text-slate-800 text-sm">Periodic Welcome Splash Overlay</h4>
-                    <p className="text-xs text-slate-500">Displays 10s full screen greeting for new patients</p>
+                    <label className="text-xs font-bold uppercase tracking-wider text-slate-600">Tagline / Specialty</label>
+                    <input
+                      type="text"
+                      value={settings.tagline}
+                      onChange={(e) => onSaveSettings({ tagline: e.target.value })}
+                      className="w-full p-2.5 bg-white border border-slate-300 rounded-xl text-xs font-semibold text-slate-800 mt-1"
+                    />
                   </div>
-                  <input
-                    type="checkbox"
-                    checked={settings.enableWelcomeOverlay}
-                    onChange={(e) => onSaveSettings({ enableWelcomeOverlay: e.target.checked })}
-                    className="w-5 h-5 text-emerald-600 rounded cursor-pointer"
-                  />
                 </div>
 
-                {settings.enableWelcomeOverlay && (
-                  <div className="flex items-center justify-between pt-2">
-                    <span className="text-xs font-semibold text-slate-700">Display Interval</span>
-                    <select
-                      value={settings.welcomeInterval}
-                      onChange={(e) => onSaveSettings({ welcomeInterval: Number(e.target.value) })}
-                      className="p-2 bg-white rounded-xl border border-slate-300 text-xs font-bold"
-                    >
-                      <option value={300000}>Every 5 Minutes</option>
-                      <option value={900000}>Every 15 Minutes (Default)</option>
-                      <option value={1800000}>Every 30 Minutes</option>
-                    </select>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-bold uppercase tracking-wider text-slate-600">Primary Color</label>
+                    <div className="flex items-center gap-2 mt-1">
+                      <input
+                        type="color"
+                        value={settings.primaryColor}
+                        onChange={(e) => onSaveSettings({ primaryColor: e.target.value })}
+                        className="w-9 h-9 rounded-xl border border-slate-300 cursor-pointer"
+                      />
+                      <input
+                        type="text"
+                        value={settings.primaryColor}
+                        onChange={(e) => onSaveSettings({ primaryColor: e.target.value })}
+                        className="flex-1 p-2 bg-white border border-slate-300 rounded-xl text-xs font-mono"
+                      />
+                    </div>
                   </div>
-                )}
+
+                  <div>
+                    <label className="text-xs font-bold uppercase tracking-wider text-slate-600">Accent Color</label>
+                    <div className="flex items-center gap-2 mt-1">
+                      <input
+                        type="color"
+                        value={settings.accentColor}
+                        onChange={(e) => onSaveSettings({ accentColor: e.target.value })}
+                        className="w-9 h-9 rounded-xl border border-slate-300 cursor-pointer"
+                      />
+                      <input
+                        type="text"
+                        value={settings.accentColor}
+                        onChange={(e) => onSaveSettings({ accentColor: e.target.value })}
+                        className="flex-1 p-2 bg-white border border-slate-300 rounded-xl text-xs font-mono"
+                      />
+                    </div>
+                  </div>
+                </div>
               </div>
 
-              {/* Fullscreen & Sleep Prevener */}
-              <div className="p-4 bg-slate-900 text-white rounded-2xl space-y-3">
-                <h4 className="font-bold text-sm">Bolva TV Display Diagnostics</h4>
-
-                <div className="flex items-center justify-between text-xs pt-1">
-                  <span className="text-slate-300">TV Focus Bouncer (Prevent Sleep)</span>
-                  <span className="text-emerald-400 font-bold font-mono">ACTIVE (30s)</span>
+              {/* SECTION C: TV GUARD & REMOTE CONTROLS */}
+              <div className="p-5 bg-slate-50 rounded-3xl border border-slate-200 space-y-4">
+                <div className="flex items-center gap-2 pb-2 border-b border-slate-200">
+                  <Radio className="w-5 h-5 text-emerald-600" />
+                  <h3 className="font-bold text-base text-slate-800">TV Remote & Display Controls</h3>
                 </div>
 
-                <button
-                  onClick={handleToggleFullscreen}
-                  className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-2 cursor-pointer shadow-md"
-                >
-                  <Maximize2 className="w-4 h-4" />
-                  <span>Toggle Full Screen TV Mode</span>
-                </button>
+                {/* Virtual Remote Actions */}
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    onClick={onNextVideo}
+                    className="py-3 px-4 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold uppercase tracking-wider rounded-xl flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <Play className="w-4 h-4 text-emerald-400" />
+                    <span>Skip Video</span>
+                  </button>
+
+                  <button
+                    onClick={onToggleMute}
+                    className="py-3 px-4 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold uppercase tracking-wider rounded-xl flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    {muted ? <VolumeX className="w-4 h-4 text-amber-400" /> : <Volume2 className="w-4 h-4 text-emerald-400" />}
+                    <span>{muted ? 'Unmute' : 'Mute'}</span>
+                  </button>
+
+                  <button
+                    onClick={onTriggerWelcomeNow}
+                    className="py-3 px-4 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold uppercase tracking-wider rounded-xl flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <Sparkles className="w-4 h-4 text-amber-400" />
+                    <span>Test Welcome Overlay</span>
+                  </button>
+
+                  <button
+                    onClick={handleToggleFullscreen}
+                    className="py-3 px-4 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold uppercase tracking-wider rounded-xl flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <Maximize2 className="w-4 h-4" />
+                    <span>Toggle Fullscreen</span>
+                  </button>
+                </div>
+
+                {/* OLED Anti-Burn-In Settings */}
+                <div className="p-3.5 bg-white rounded-2xl border border-slate-200 space-y-2 mt-2">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="font-bold text-slate-800 text-xs">OLED Anti-Burn-In Noise Filter</h4>
+                      <p className="text-[10px] text-slate-500">Shifts sub-pixels periodically to protect Summit TV screen</p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={settings.enableAntiBurnIn}
+                      onChange={(e) => onSaveSettings({ enableAntiBurnIn: e.target.checked })}
+                      className="w-4 h-4 text-emerald-600 rounded cursor-pointer"
+                    />
+                  </div>
+                </div>
+
+                {/* Periodic Welcome Overlay */}
+                <div className="p-3.5 bg-white rounded-2xl border border-slate-200 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="font-bold text-slate-800 text-xs">Periodic Welcome Splash</h4>
+                      <p className="text-[10px] text-slate-500">Displays 10s full-screen clinic greeting periodically</p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={settings.enableWelcomeOverlay}
+                      onChange={(e) => onSaveSettings({ enableWelcomeOverlay: e.target.checked })}
+                      className="w-4 h-4 text-emerald-600 rounded cursor-pointer"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -726,3 +940,4 @@ export const SettingsDrawer: React.FC<Props> = ({
     </div>
   );
 };
+

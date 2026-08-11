@@ -123,7 +123,7 @@ export default function App() {
     return () => clearInterval(interval);
   }, [isStarted, settings.enableWelcomeOverlay, settings.welcomeInterval]);
 
-  // Preventive Focus Bouncer to keep Bolva TV awake
+  // Preventive Focus Bouncer to keep Summit TV awake
   useEffect(() => {
     if (!isStarted || !settings.preventTvSleep) return;
 
@@ -188,7 +188,7 @@ export default function App() {
         backgroundColor: settings.primaryColor || '#122442',
       }}
     >
-      {/* Anti-Burn-In Pixel Shift Layer for Bolva TV */}
+      {/* Anti-Burn-In Pixel Shift Layer for Summit TV */}
       <TvHeartbeatOverlay
         enabled={settings.enableAntiBurnIn}
         opacity={settings.antiBurnInOpacity}

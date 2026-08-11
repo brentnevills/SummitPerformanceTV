@@ -4,7 +4,7 @@
   --summit-navy: #122442; 
   --summit-green: #76b72a;
   --sidebar-width: 28vw;
-  --topbar-height: 16vh;
+  --topbar-height: 20vh;
   --bg-color: #ffffff;
   --text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
 }
@@ -82,9 +82,9 @@ body, html {
   display: flex;
   align-items: center;
   justify-content: center;
-  border-bottom: 8px solid var(--summit-green);
+  border-bottom: 10px solid var(--summit-green);
   z-index: 20;
-  padding: 0 8px;
+  padding: 12px 24px;
   position: relative;
   overflow: hidden;
 }
