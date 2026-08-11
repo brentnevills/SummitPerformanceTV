@@ -1,0 +1,31 @@
+import { GoogleGenAI, Type } from '@google/genai';
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+async function test() {
+    try {
+        const response = await ai.models.generateContent({
+            model: "gemini-3.1-flash-lite",
+            contents: `Video URL: https://www.youtube.com/watch?v=1F_C6HQwuM0
+Please provide a verbatim, timestamped speech-to-text transcript of the actual spoken audio in this video.`,
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: {
+                  type: Type.ARRAY,
+                  items: {
+                    type: Type.OBJECT,
+                    properties: {
+                      startTime: { type: Type.NUMBER },
+                      endTime: { type: Type.NUMBER },
+                      text: { type: Type.STRING },
+                      speaker: { type: Type.STRING },
+                    },
+                    required: ["startTime", "endTime", "text"],
+                  },
+                },
+            }
+        });
+        console.log("SUCCESS SCHEMA:", response.text.slice(0, 100));
+    } catch (e) {
+        console.error("ERROR SCHEMA:", e.status, e.message);
+    }
+}
+test();

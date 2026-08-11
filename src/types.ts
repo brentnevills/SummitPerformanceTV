@@ -52,9 +52,9 @@ export interface ClinicSettings {
   tvResolutionScale: '1080p' | '720p' | '4k';
   preventTvSleep: boolean;
   mutedByPolicy: boolean;
-  notificationFontSize?: 'small' | 'medium' | 'large' | 'xlarge';
+  notificationFontSize?: 'small' | 'medium' | 'large' | 'xlarge' | 'xxlarge' | 'xxxlarge';
   enableClosedCaptions?: boolean;
-  captionFontSize?: 'small' | 'medium' | 'large' | 'xlarge';
+  captionFontSize?: 'small' | 'medium' | 'large' | 'xlarge' | 'xxlarge' | 'xxxlarge';
   captionPosition?: 'bottom' | 'top';
 }
 

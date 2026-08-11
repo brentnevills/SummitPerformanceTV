@@ -7,7 +7,7 @@ interface Props {
   primaryColor?: string;
   accentColor?: string;
   clockFormat?: '12h' | '24h';
-  fontSize?: 'small' | 'medium' | 'large' | 'xlarge';
+  fontSize?: 'small' | 'medium' | 'large' | 'xlarge' | 'xxlarge' | 'xxxlarge';
 }
 
 export const AnnouncementSidebar: React.FC<Props> = ({
@@ -27,6 +27,8 @@ export const AnnouncementSidebar: React.FC<Props> = ({
     medium: { fontSize: '1.25rem', lineHeight: '1.75rem' },
     large: { fontSize: '1.65rem', lineHeight: '2.15rem' },
     xlarge: { fontSize: '2.25rem', lineHeight: '2.8rem' },
+    xxlarge: { fontSize: '3rem', lineHeight: '3.6rem' },
+    xxxlarge: { fontSize: '4rem', lineHeight: '4.8rem' },
   }[fontSize] || { fontSize: '1.25rem', lineHeight: '1.75rem' };
 
   // Time and Date State

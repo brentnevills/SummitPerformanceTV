@@ -412,6 +412,8 @@ export const SettingsDrawer: React.FC<Props> = ({
                     <option value="medium">Medium (Default)</option>
                     <option value="large">Large</option>
                     <option value="xlarge">Extra Large</option>
+                    <option value="xxlarge">2X Large</option>
+                    <option value="xxxlarge">3X Large</option>
                   </select>
                 </div>
               </div>
@@ -959,6 +961,8 @@ export const SettingsDrawer: React.FC<Props> = ({
                       <option value="medium">Medium (Default)</option>
                       <option value="large">Large</option>
                       <option value="xlarge">Extra Large</option>
+                      <option value="xxlarge">2X Large</option>
+                      <option value="xxxlarge">3X Large</option>
                     </select>
                   </div>
 

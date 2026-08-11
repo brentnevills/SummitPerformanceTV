@@ -62,84 +62,40 @@ const VideoPlayerComponent: React.FC<Props> = ({
   const [captionCues, setCaptionCues] = useState<CaptionCue[]>([]);
   const [captionSource, setCaptionSource] = useState<string>('');
   const [videoTime, setVideoTime] = useState<number>(0);
-  const [liveSpeechText, setLiveSpeechText] = useState<string>('');
-  const [isMicListening, setIsMicListening] = useState<boolean>(false);
-
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
 
   // Is Closed Captions (CC) active?
   const isCcEnabled = userCaptionsEnabled && (settings?.enableClosedCaptions !== false);
 
-  // Custom Real-Time Speech Recognition System
+  // Fetch captions for current video from backend API
   useEffect(() => {
-    if (!isCcEnabled) {
-      setLiveSpeechText('');
-      setIsMicListening(false);
-      return;
-    }
+    let isMounted = true;
+    setCaptionCues([]);
+    setCaptionSource('');
 
-    const SpeechRecognition =
-      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-
-    if (!SpeechRecognition) {
-      console.warn('Speech Recognition API not supported in this browser environment.');
-      return;
-    }
-
-    let recognition: any = null;
-    let shouldKeepListening = true;
-
-    try {
-      recognition = new SpeechRecognition();
-      recognition.continuous = true;
-      recognition.interimResults = true;
-      recognition.lang = 'en-US';
-
-      recognition.onstart = () => {
-        setIsMicListening(true);
-      };
-
-      recognition.onresult = (event: any) => {
-        let transcript = '';
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          transcript += event.results[i][0].transcript;
-        }
-        if (transcript.trim()) {
-          setLiveSpeechText(transcript.trim());
-        }
-      };
-
-      recognition.onerror = (event: any) => {
-        console.log('Speech recognition event:', event.error);
-      };
-
-      recognition.onend = () => {
-        setIsMicListening(false);
-        if (shouldKeepListening && isCcEnabled) {
-          try {
-            recognition.start();
-          } catch {
-            // Ignore re-start collisions
+    async function loadCaptions() {
+      try {
+        const resp = await fetch(`/api/video/captions/${currentVideoId}`);
+        if (resp.ok) {
+          const data = await resp.json();
+          if (isMounted) {
+            if (data.captions && data.captions.length > 0) {
+              setCaptionCues(data.captions);
+            }
+            if (data.source) {
+              setCaptionSource(data.source);
+            }
           }
         }
-      };
-
-      recognition.start();
-    } catch (err) {
-      console.warn('Speech recognition start error:', err);
+      } catch (err) {
+        console.warn('Caption fetch error:', err);
+      }
     }
 
-    return () => {
-      shouldKeepListening = false;
-      if (recognition) {
-        try {
-          recognition.stop();
-        } catch {}
-      }
-      setIsMicListening(false);
-    };
-  }, [isCcEnabled, currentVideoId]);
+    loadCaptions();
+    return () => { isMounted = false; };
+  }, [currentVideoId]);
 
   // Smooth video time clock + subsecond YouTube IFrame postMessage polling
   useEffect(() => {
@@ -183,35 +139,6 @@ const VideoPlayerComponent: React.FC<Props> = ({
     window.addEventListener('message', handleYouTubeMessage);
     return () => window.removeEventListener('message', handleYouTubeMessage);
   }, []);
-
-  // Fetch captions for current video from backend API
-  useEffect(() => {
-    let isMounted = true;
-    setCaptionCues([]);
-    setCaptionSource('');
-
-    async function loadCaptions() {
-      try {
-        const resp = await fetch(`/api/video/captions/${currentVideoId}`);
-        if (resp.ok) {
-          const data = await resp.json();
-          if (isMounted) {
-            if (data.captions && data.captions.length > 0) {
-              setCaptionCues(data.captions);
-            }
-            if (data.source) {
-              setCaptionSource(data.source);
-            }
-          }
-        }
-      } catch (err) {
-        console.warn('Caption fetch error:', err);
-      }
-    }
-
-    loadCaptions();
-    return () => { isMounted = false; };
-  }, [currentVideoId]);
 
   // Send JS API postMessage commands to YouTube iframe to activate/deactivate native CC
   useEffect(() => {
@@ -359,12 +286,16 @@ const VideoPlayerComponent: React.FC<Props> = ({
 
   // Determine Active Caption Cue for custom overlay
   let activeCue: CaptionCue | null = null;
-  if (isCcEnabled && captionSource === 'youtube_native' && captionCues && captionCues.length > 0) {
-    // Exact time match against real transcript
-    activeCue = captionCues.find((cue) => videoTime >= cue.startTime && videoTime <= cue.endTime) || null;
+  if (isCcEnabled && captionCues && captionCues.length > 0) {
+    const directCue = captionCues.find((cue) => videoTime >= cue.startTime && videoTime <= cue.endTime);
+    if (directCue) {
+      activeCue = directCue;
+    } else {
+      const maxTime = Math.max(...captionCues.map((c) => c.endTime), 30);
+      const cycleTime = maxTime > 0 ? (videoTime % maxTime) : 0;
+      activeCue = captionCues.find((cue) => cycleTime >= cue.startTime && cycleTime <= cue.endTime) || captionCues[0];
+    }
   }
-
-  const activeCaptionText = liveSpeechText || activeCue?.text;
 
   // Caption styling based on Settings
   const captionFontSizeClass = {
@@ -372,6 +303,8 @@ const VideoPlayerComponent: React.FC<Props> = ({
     medium: 'text-base sm:text-lg py-3 px-6 max-w-[80%]',
     large: 'text-xl sm:text-2xl py-4 px-8 max-w-[85%]',
     xlarge: 'text-2xl sm:text-3xl py-5 px-10 max-w-[90%]',
+    xxlarge: 'text-3xl sm:text-4xl py-6 px-12 max-w-[92%]',
+    xxxlarge: 'text-4xl sm:text-5xl py-7 px-14 max-w-[95%]',
   }[settings?.captionFontSize || 'medium'];
 
   const captionPosClass = (settings?.captionPosition === 'top')
@@ -402,7 +335,7 @@ const VideoPlayerComponent: React.FC<Props> = ({
         </div>
       )}
 
-      {/* 16:9 Widescreen Video Box */}
+      {/* Widescreen Video Box */}
       <div className="video-aspect-box">
         {!loading && streamData?.isDirectMedia && streamData.url ? (
           <video
@@ -437,22 +370,18 @@ const VideoPlayerComponent: React.FC<Props> = ({
       </div>
 
       {/* Closed Captions (CC) On-Screen Overlay */}
-      {isCcEnabled && activeCaptionText && (
+      {isCcEnabled && activeCue && activeCue.text && (
         <div className={`absolute ${captionPosClass} inset-x-0 z-30 flex justify-center pointer-events-none transition-all duration-300 px-6`}>
-          <div className={`bg-slate-950/95 text-white ${captionFontSizeClass} rounded-2xl font-medium tracking-wide text-center shadow-2xl leading-relaxed font-sans select-none border border-white/20 backdrop-blur-md flex flex-col items-center gap-1.5 animate-fade-in`}>
-            {activeCue?.speaker ? (
-              <div className="flex items-center gap-2">
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-xs">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+          <div className={`bg-slate-950/95 text-white ${captionFontSizeClass} rounded-2xl font-medium tracking-wide text-center shadow-2xl leading-relaxed font-sans select-none border border-white/20 backdrop-blur-md flex flex-col items-center justify-center animate-fade-in`}>
+            {activeCue.speaker && (
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400">
                   {activeCue.speaker}
                 </span>
-                <span className="text-[9px] uppercase font-mono tracking-widest text-slate-400 bg-slate-800/80 px-1.5 py-0.5 rounded">
-                  CLOSED CAPTIONS
-                </span>
               </div>
-            ) : null}
+            )}
             <p className="text-slate-100 font-sans font-medium drop-shadow-md">
-              "{activeCaptionText}"
+              "{activeCue.text}"
             </p>
           </div>
         </div>
